@@ -1,0 +1,8 @@
+{
+  "global": {
+    "env": "dev",
+    "var": { "api_key": "oops"
+  },
+  "dev": {
+    "api_key": "dev-key"
+  }

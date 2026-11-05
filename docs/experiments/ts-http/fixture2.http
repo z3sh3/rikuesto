@@ -1,0 +1,36 @@
+@host = example.com
+
+# @name login
+POST https://{{host}}/login
+Content-Type: application/json
+Authorization: Bearer {{token}}
+X-Trace: abc
+
+{
+  "user": "a",
+  "tags": ["x", "y"]
+}
+
+> {%
+  client.log("hi");
+%}
+
+###
+
+### plain
+GET https://{{host}}/x
+Accept: application/json
+
+###
+
+POST https://{{host}}/form
+Content-Type: application/x-www-form-urlencoded
+
+a=1&b=2
+
+###
+
+POST https://{{host}}/bin
+Content-Type: application/octet-stream
+
+< ./payload.bin

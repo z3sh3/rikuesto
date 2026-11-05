@@ -1,0 +1,32 @@
+@host = example.com
+@token := abc
+
+# @name list
+GET https://{{host}}/items
+Accept: application/json
+
+###
+
+### Create item
+POST https://{{host}}/items
+Content-Type: application/json
+X-Trace: one
+  two
+
+{
+  "name": "widget",
+  "tags": ["a", "b"]
+}
+
+> {%
+  client.log("created");
+%}
+
+###
+
+### Submit the form
+POST https://{{host}}/form
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{token}}
+
+a=1&b=2

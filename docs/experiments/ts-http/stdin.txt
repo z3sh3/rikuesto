@@ -1,0 +1,22 @@
+[jq] code=0
+{
+  "b": 1,
+  "a": {
+    "z": [
+      1,
+      2
+    ]
+  },
+  "big": 1234567890123456789
+}
+[oxfmt] code=0
+const a = { b: 1, c: [1, 2] };
+function f() {
+  return a;
+}
+if (a.b) {
+  console.log("x");
+}
+[oxfmt fragment] code=0 out="return response.status === 200;\
+" err=""
+[jq utf8] code=0 out={   "msg": "中文 test ✓" } 

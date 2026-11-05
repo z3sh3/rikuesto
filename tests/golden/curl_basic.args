@@ -1,0 +1,17 @@
+curl
+-sS
+--no-progress-meter
+-D
+<tmp>/headers.txt
+-o
+<tmp>/body.bin
+-w
+%{json}
+-L
+--max-time
+30
+-H
+Accept: application/json
+-H
+X-Trace: abc
+https://api.example.com/users

@@ -1,0 +1,25 @@
+G: > {% %} right after request line (no blank)
+   request("GET https://e.com/1\
+") target_url("https://e.com/1") request("> {%\
+  client.log(1);\
+") target_url("> {%\
+  client.log(1);") request("%}\
+") target_url("%}")
+H: > {% %} right after headers (no blank)
+   request("GET https://e.com/1\
+Accept: */*\
+") target_url("https://e.com/1") request("> {%\
+  client.log(1);\
+") target_url("> {%\
+  client.log(1);") request("%}\
+") target_url("%}")
+I: < {% %} right before request (no blank)
+   pre_request_script("< {%\
+  request.variables.set(\"a\"") script("{%\
+  request.variables.set(\"a\",1") request("GET https://e.com/1\
+") target_url("https://e.com/1")
+J: < {% %} + blank line
+   pre_request_script("< {%\
+  request.variables.set(\"a\"") script("{%\
+  request.variables.set(\"a\",1") request("GET https://e.com/1\
+") target_url("https://e.com/1")

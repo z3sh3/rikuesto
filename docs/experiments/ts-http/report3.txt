@@ -1,0 +1,29 @@
+TOP-LEVEL CHILDREN (2)
+  section                  rows  0-3   @h = x\n\nGET https://{{h}}/a\n
+  section                  rows  3-4   > ./handler.js\n
+
+Q1 multi-line URL continuation:
+  target_url = https://{{h}}/a
+  target_url = > ./handler.js
+
+Q2 multi-line header value:
+
+Q3 urlencoded body / Q4 external body / Q6 external script:
+  raw_body         <none>
+  external_body    <none>
+  json_body        <none>
+  xml_body         <none>
+  graphql_data     <none>
+  script           <none>
+  response         <none>
+  body             <none>
+
+Q5 script fields (pre-request / response):
+
+Q7 metadata comments:
+
+Q8 request count / Q9 := declaration / Q10 implicit GET:
+  request nodes = 2
+  variable_declaration: @h = x\n
+  request rows 2-3 method=GET
+  request rows 3-4 method=nil

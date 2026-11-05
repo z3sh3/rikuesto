@@ -1,0 +1,21 @@
+curl
+-sS
+--no-progress-meter
+-D
+<tmp>/headers.txt
+-o
+<tmp>/body.bin
+-w
+%{json}
+-X
+POST
+--http2
+--max-time
+30
+-H
+Content-Type: multipart/form-data
+-F
+name=zeng
+-F
+file=@./avatar.png
+https://api.example.com/upload

@@ -1,0 +1,175 @@
+### ============================================================
+### jsonplaceholder.typicode.com - HTTP 请求示例集合
+### 覆盖 GET / POST / PUT / PATCH / DELETE 等方法
+### 可在 VS Code REST Client、IntelliJ HTTP Client 等工具中直接执行
+### ============================================================
+
+@base = https://jsonplaceholder.typicode.com
+
+### ---------- 1. GET - 获取资源列表 ----------
+
+# 获取所有文章
+GET {{base}}/posts
+
+###
+
+# 获取列表并携带查询参数(过滤 + 排序 + 分页)
+GET {{base}}/posts?userId=1&_limit=5&_sort=id&_order=desc
+
+###
+
+# 获取单个资源
+GET {{base}}/posts/1
+
+###
+
+### ---------- 2. GET - 嵌套子资源 ----------
+
+# 获取某篇文章的所有评论
+GET {{base}}/posts/1/comments
+
+###
+
+# 获取某个相册的所有照片
+GET {{base}}/albums/1/photos
+
+###
+
+# 组合查询: 用户的待办事项
+GET {{base}}/todos?userId=1&_limit=10
+
+###
+
+### ---------- 3. POST - 创建资源 ----------
+
+# 新建文章 (返回 201, body 中带上新分配的 id)
+POST {{base}}/posts
+Content-Type: application/json
+
+{
+  "title": "Hello REST Client",
+  "body": "This is a test post created via test.http",
+  "userId": 1
+}
+
+###
+
+# 新建用户
+POST {{base}}/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Test User",
+  "username": "testuser",
+  "email": "testuser@example.com",
+  "address": {
+    "street": "Simplify Street 123",
+    "suite": "Apt 101",
+    "city": "Gwenborough",
+    "zipcode": "92998-3874",
+    "geo": {
+      "lat": "-37.3159",
+      "lng": "81.1496"
+    }
+  },
+  "phone": "010-778520",
+  "website": "example.com",
+  "company": {
+    "name": "Hilbert Inc",
+    "catchPhrase": "Multi-layered client-server neural-net",
+    "bs": "harness real-time e-markets"
+  }
+}
+
+###
+
+### ---------- 4. PUT - 全量更新资源 ----------
+
+# 完整替换文章 1 (需提供所有字段)
+PUT {{base}}/posts/1
+Content-Type: application/json
+
+{
+  "id": 1,
+  "title": "Updated Title (PUT full replace)",
+  "body": "Updated body content replacing the original one.",
+  "userId": 1
+}
+
+###
+
+# 完整替换待办事项 1
+PUT {{base}}/todos/1
+Content-Type: application/json
+
+{
+  "id": 1,
+  "title": "Updated todo title",
+  "completed": true,
+  "userId": 1
+}
+
+###
+
+### ---------- 5. PATCH - 部分更新资源 ----------
+
+# 仅修改文章 1 的标题
+PATCH {{base}}/posts/1
+Content-Type: application/json
+
+{
+  "title": "Patched Title Only"
+}
+
+###
+
+# 仅将评论 1 标记为已完成状态字段
+PATCH {{base}}/comments/1
+Content-Type: application/json
+
+{
+  "name": "Patched comment name",
+  "email": "patched@example.com"
+}
+
+###
+
+### ---------- 6. DELETE - 删除资源 ----------
+
+# 删除文章 1 (该 API 为模拟数据, 返回 200 与空对象)
+DELETE {{base}}/posts/1
+
+###
+
+# 删除相册 1
+DELETE {{base}}/albums/1
+
+###
+
+### ---------- 7. 其他方法 / 边界情况 ----------
+
+# HEAD - 仅获取响应头 (验证资源是否存在)
+HEAD {{base}}/posts/1
+
+###
+
+# OPTIONS - 查询服务器支持的跨域方法
+OPTIONS {{base}}/posts
+
+###
+
+# GET 不存在的资源 -> 预期 404
+GET {{base}}/posts/999
+
+###
+
+# POST 到不存在的资源路径 -> 预期 404
+POST {{base}}/invalid-resource
+Content-Type: application/json
+
+{
+  "foo": "bar"
+}
+
+###

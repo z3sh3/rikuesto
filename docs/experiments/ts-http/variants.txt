@@ -1,0 +1,13 @@
+A: response-path right after request line
+   section("GET https://e.com/1\\n") request("GET https://e.com/1\\n") target_url("https://e.com/1") section("> ./handler.js\\n") request("> ./handler.js\\n") target_url("> ./handler.js")
+B: response-path after blank line
+   section("GET https://e.com/1\\n\\n> ./handler.js\\n") request("GET https://e.com/1\\n\\n> ./handler.js\\n") target_url("https://e.com/1") res_handler_script("> ./handler.js\\n") path("./handler.js")
+C: response-path after headers+body
+   section("POST https://e.com/1\\nContent-Type: appl") request("POST https://e.com/1\\nContent-Type: appl") target_url("https://e.com/1") header("Content-Type: application/json\\n") raw_body("{\"a\":1}\\n") res_handler_script("> ./handler.js\\n") path("./handler.js")
+D: inline json body without space (json_body?)
+   section("POST https://e.com/1\\nContent-Type: appl") request("POST https://e.com/1\\nContent-Type: appl") target_url("https://e.com/1") header("Content-Type: application/json\\n") raw_body("{\"a\":1}\\n")
+E: json body with newline after brace
+   section("POST https://e.com/1\\nContent-Type: appl") request("POST https://e.com/1\\nContent-Type: appl") target_url("https://e.com/1") header("Content-Type: application/json\\n") json_body("{\\n  \"a\": 1\\n}\\n")
+F: script response handler after body
+   section("POST https://e.com/1\\nContent-Type: appl") request("POST https://e.com/1\\nContent-Type: appl") target_url("https://e.com/1") header("Content-Type: application/json\\n") raw_body("{\"a\":1}\\n\\n") res_handler_script("> {%\\n  client.log(1);\\n%}\\n") script("{%\\n  client.log(1);\\n%}")
+vim.json roundtrip: {"z":1,"a":2,"m":3} -> {"m":3,"z":1,"a":2}

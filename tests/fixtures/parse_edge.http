@@ -1,0 +1,73 @@
+/* Document level block comment
+   spanning two lines */
+
+# @timeout 2500
+# @proxy http://localhost:8080
+# @no-redirect
+# @no-cookie-jar
+# @insecure
+# @custom-thing abc
+
+https://example.com/implicit
+  ?page=1
+&limit=10
+
+###
+### XML payload
+# @name xmlPayload
+POST https://example.com/xml HTTP/1.1
+Content-Type: application/xml
+
+<note>
+  <to>you</to>
+</note>
+
+###
+### External body
+# @ref xmlPayload
+PUT https://example.com/bin
+Content-Type: application/octet-stream
+
+< ./payload.bin
+
+###
+### Multipart upload
+POST https://example.com/upload
+Content-Type: multipart/form-data
+
+field=value
+file=@./cat.png
+
+###
+### GraphQL query
+POST https://example.com/graphql
+Content-Type: application/graphql
+
+query {
+  me { id }
+}
+
+###
+### No blank line around the scripts
+< {%
+  request.variables.set("nonce", "abc");
+%}
+GET https://example.com/ping
+> ./handler.js
+
+###
+### Assertions and a block level variable
+POST https://example.com/override
+Content-Type: text/plain
+# @lang json
+@count = 2
+@lazy := 3
+
+a=1&b=2
+
+?? status == 200
+?? body.count == 2
+
+> {%
+  client.log("checked");
+%}

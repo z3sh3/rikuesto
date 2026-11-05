@@ -1,0 +1,4 @@
+@h = x
+
+GET https://{{h}}/a
+> ./handler.js

@@ -1,0 +1,63 @@
+TOP-LEVEL CHILDREN (13)
+  section                  rows  0-1   @host = example.com\n
+  section                  rows  1-2   @version := v2\n
+  section                  rows  2-14  \n< {%\n  const ts = Date.now();\n  request.variables.set("ts", ts);\n…
+  ERROR                    rows 14-17    part2\n\n{\n  
+  section                  rows 17-18  "a": 1\n
+  section                  rows 18-24  }\n\n> {%\n  client.test("ok", function () { client.assert(response.st…
+  section                  rows 24-26  ###\n\n
+  section                  rows 26-33  ### Form login\nPOST https://{{host}}/form\nContent-Type: application/…
+  section                  rows 33-36  ###\n\nGET https://{{host}}/file\n
+  section                  rows 36-38  > ./handler.js\n\n
+  section                  rows 38-45  ###\n\nPOST https://{{host}}/bin\nContent-Type: application/octet-stre…
+  section                  rows 45-47  ###\n\n
+  section                  rows 47-48  https://{{host}}/implicit-get\n
+
+Q1 multi-line URL continuation:
+  target_url = https://{{host}}/api/{{version}}/login\n  ?user=a\n  &extra=1
+  target_url = "a": 1
+  target_url = }
+  target_url = https://{{host}}/form
+  target_url = https://{{host}}/file
+  target_url = > ./handler.js
+  target_url = https://{{host}}/bin
+  target_url = https://{{host}}/implicit-get
+
+Q2 multi-line header value:
+  header name="Content-Type" value="application/json"
+  header name="X-Long-Header" value="part1"
+  header name="Content-Type" value="application/x-www-form-urlencoded"
+  header name="Content-Type" value="application/octet-stream"
+
+Q3 urlencoded body / Q4 external body / Q6 external script:
+  raw_body         rows 30-33 "username=admin\\n&password=secret\\n\\n"
+  external_body    rows 43-43 "< ./payload.bin"
+  json_body        <none>
+  xml_body         <none>
+  graphql_data     <none>
+  script           rows  3-6  "{%\\n  const ts = Date.now();\\n  request.variables.set(\"ts\", "
+  script           rows 20-22 "{%\\n  client.test(\"ok\", function () { client.assert(response"
+  response         <none>
+  body             <none>
+
+Q5 script fields (pre-request / response):
+  script parent=pre_request_script kind=nil body="nil"
+  script parent=res_handler_script kind=nil body="nil"
+
+Q7 metadata comments:
+  comment name="name" value="login" raw="# @name login\\n"
+
+Q8 request count / Q9 := declaration / Q10 implicit GET:
+  request nodes = 8
+  variable_declaration: @host = example.com\n
+  variable_declaration: @version := v2\n
+  request rows 9-14 method=POST
+  request rows 17-18 method=nil
+  request rows 18-24 method=nil
+  request rows 27-33 method=POST
+  request rows 35-36 method=GET
+  request rows 36-38 method=nil
+  request rows 40-45 method=POST
+  request rows 47-48 method=nil
+  ERROR node: :
+  ERROR node:   part2\n\n{\n  

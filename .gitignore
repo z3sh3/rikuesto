@@ -1,0 +1,10 @@
+# Python tooling cache left behind by the ruff runner
+.ruff_cache/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local logs and scratch output
+*.log

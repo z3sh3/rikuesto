@@ -1,0 +1,4 @@
+jq         exepath=C:\Users\zeng\AppData\Local\Microsoft\WinGet\Links\jq.EXE    code=0 out=jq-1.8.2  err=
+oxfmt      exepath=C:\Users\zeng\AppData\Local\pnpm\bin\oxfmt.CMD               code=0 out=Version: 0.75.0   err=
+oxfmt.CMD  exepath=C:\Users\zeng\AppData\Local\pnpm\bin\oxfmt.CMD               code=0 out=Version: 0.75.0   err=
+jq.exe     exepath=C:\Users\zeng\AppData\Local\Microsoft\WinGet\Links\jq.exe    code=0 out=jq-1.8.2  err=

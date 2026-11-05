@@ -1,0 +1,21 @@
+{
+  "global": {
+    "env": "dev",
+    "var": {
+      "api_key": "global-key",
+      "test_host": "http://demo",
+      "port": 8080,
+      "debug": true,
+      "cfg": { "host": "nested.example", "region": "eu" }
+    },
+    "defaults": { "timeout": 30000, "follow_redirects": true }
+  },
+  "dev": {
+    "api_key": "dev-key",
+    "dev_host": "https://dev"
+  },
+  "prod": {
+    "api_key": "prod-key",
+    "dev_host": "https://prod"
+  }
+}

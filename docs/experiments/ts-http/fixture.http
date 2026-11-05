@@ -1,0 +1,48 @@
+@host = example.com
+@version := v2
+
+< {%
+  const ts = Date.now();
+  request.variables.set("ts", ts);
+%}
+
+# @name login
+POST https://{{host}}/api/{{version}}/login
+  ?user=a
+  &extra=1
+Content-Type: application/json
+X-Long-Header: part1
+  part2
+
+{
+  "a": 1
+}
+
+> {%
+  client.test("ok", function () { client.assert(response.status === 200); });
+%}
+
+###
+
+### Form login
+POST https://{{host}}/form
+Content-Type: application/x-www-form-urlencoded
+
+username=admin
+&password=secret
+
+###
+
+GET https://{{host}}/file
+> ./handler.js
+
+###
+
+POST https://{{host}}/bin
+Content-Type: application/octet-stream
+
+< ./payload.bin
+
+###
+
+https://{{host}}/implicit-get

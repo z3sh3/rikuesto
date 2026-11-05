@@ -1,0 +1,27 @@
+{
+    "phase": "post",
+    "script": "",
+    "meta": { "row": 4, "col": 0, "lang": "javascript" },
+    "request": {
+        "method": "GET",
+        "url": "https://api.example.test/items",
+        "headers": [["Accept", "application/json"], ["X-Trace", "rikuesto"]],
+        "body": ""
+    },
+    "response": {
+        "status": 200,
+        "headers": [
+            ["Content-Type", "application/json; charset=utf-8"],
+            ["Set-Cookie", "sid=abc123; Path=/"],
+            ["Set-Cookie", "theme=dark; HttpOnly"],
+            ["X-Request-Id", "r-1"],
+            ["X-Request-Id", "r-2"]
+        ],
+        "bodyBase64": "eyJvayI6dHJ1ZSwiaXRlbXMiOlsxLDJdfQ==",
+        "contentType": { "mimeType": "application/json", "charset": "utf-8" },
+        "durationMs": 137
+    },
+    "vars": { "host": "api.example.test", "page": "2" },
+    "globals": { "auth_token": "seed" },
+    "limits": { "timeoutMs": 3000 }
+}
