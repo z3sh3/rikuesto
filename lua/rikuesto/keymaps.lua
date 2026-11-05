@@ -56,8 +56,19 @@ function M.attach(bufnr)
   local overrides = type(setting) == 'table' and setting or {}
   M.define_plugs()
   for key, spec in pairs(DEFAULTS) do
-    local lhs = overrides[key] or (leader .. key)
-    if lhs ~= false then
+    -- `false` disables the mapping; a string replaces the default lhs.
+    local override = overrides[key]
+    local lhs
+    if override == false then
+      -- also remove a mapping installed by an earlier attach (e.g. before setup() ran)
+      pcall(vim.keymap.del, 'n', leader .. key, { buffer = bufnr })
+      lhs = nil
+    elseif type(override) == 'string' and override ~= '' then
+      lhs = override
+    else
+      lhs = leader .. key
+    end
+    if lhs then
       vim.keymap.set('n', lhs, spec[1], {
         buffer = bufnr,
         silent = true,

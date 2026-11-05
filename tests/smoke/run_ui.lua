@@ -122,7 +122,31 @@ do
   check(true, 'env/vars/log subcommands run without error')
 end
 
--- 10. health module
+-- 10. keymap overrides: `false` disables, a string replaces the lhs
+--     (regression: `overrides[key] or default` treated `false` as "use default")
+do
+    local keymaps = require('rikuesto.keymaps')
+    require('rikuesto.config').setup({
+        log = { level = 'error' },
+        ui = { response = { open = 'never' } },
+        keymaps = { rr = false, rc = ',rc' },
+    })
+    keymaps.attach(bufnr)
+    local leader = vim.g.maplocalleader or vim.g.mapleader or '\\'
+    local function rhs_of(lhs)
+        for _, map in ipairs(vim.api.nvim_buf_get_keymap(bufnr, 'n')) do
+            if map.lhs == lhs then
+                return map.rhs
+            end
+        end
+        return nil
+    end
+    check(rhs_of(leader .. 'rr') == nil, 'keymaps.rr = false removes the default mapping')
+    check(rhs_of(',rc') == '<Plug>(rikuesto-copy-curl)', 'keymaps.rc = ",rc" installs the custom lhs')
+    check(rhs_of(leader .. 'rf') == '<Plug>(rikuesto-format)', 'non-overridden defaults stay in place')
+end
+
+-- 11. health module
 do
   local ok, err = pcall(function()
     require('rikuesto.health').check()
