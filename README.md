@@ -160,30 +160,49 @@ Content-Type: application/json
 | `:Rikuesto log [clear]` | Open the diagnostic log buffer |
 | `:Rikuesto help` | List the commands (also the no-argument form) |
 
-## Default keymaps
+## Keymaps
 
-Buffer-local, only in `.http` / `.rest` buffers, and only when `keymaps` is enabled. Every action also
-has a `<Plug>(rikuesto-…)` mapping you can rebind.
+**The plugin installs no keymaps by default.** Every action is available as `:Rikuesto …` and as a
+`<Plug>(rikuesto-…)` mapping, so you decide what to bind.
 
-| Keys | Action |
-|---|---|
-| `<localleader>rr` | run request under cursor |
-| `<localleader>ra` | run all requests |
-| `<localleader>rc` | copy as curl |
-| `<localleader>rf` | format buffer |
-| `<localleader>re` | switch environment |
-| `<localleader>rl` | list requests |
-| `<localleader>rx` | cancel request |
-| `<localleader>rv` | show resolved variables |
-
-Override, remap or disable them:
+Bind only what you need (buffer-local, `.http` / `.rest` files):
 
 ```lua
 require('rikuesto').setup({
-  keymaps = { rr = '<leader>R', ra = false }, -- false disables one mapping
-  -- keymaps = false,                        -- disables all buffer-local maps
+  keymaps = {
+    rr = '<Space>r', -- run the request under the cursor
+    rc = '<Space>c', -- copy the request as a curl command
+    re = '<Space>e', -- pick an environment profile
+  },
 })
 ```
+
+An explicit table maps **exactly** the keys you list — nothing else. Use `keymaps = true` for the full
+optional set (prefixed with `maplocalleader`), or bind the `<Plug>` mappings yourself.
+
+| Option | Effect |
+|---|---|
+| `keymaps = false` | no keymaps (default) |
+| `keymaps = true` | full set: `<localleader>rr` run, `ra` run all, `rc` copy as curl, `rf` format, `re` environment, `rl` list, `rx` cancel, `rv` variables |
+| `keymaps = { rr = '<Space>r', … }` | only the listed actions, on the given lhs |
+
+```lua
+-- rebind with <Plug> if you prefer your own commands
+vim.keymap.set('n', '<Space>r', '<Plug>(rikuesto-run)', { buffer = true })
+```
+
+### Cancelling a request
+
+While a request is in flight the plugin installs a **temporary** buffer-local `<C-c>` mapping that
+cancels it; the mapping disappears as soon as the response arrives, so no permanent shortcut is added.
+Change or disable it with `cancel_key`:
+
+```lua
+require('rikuesto').setup({ cancel_key = '<C-c>' })  -- default
+require('rikuesto').setup({ cancel_key = false })   -- keep <C-c> untouched
+```
+
+`:Rikuesto cancel` always works, regardless of `cancel_key` or `keymaps`.
 
 ## Configuration
 
@@ -232,6 +251,8 @@ require('rikuesto').setup({
     response = { layout = 'split', size = 0.4, open = 'auto', max_bytes = 2097152 },
     extmark = { enabled = true },
   },
+  keymaps = false,          -- no shortcuts by default; true = full set, table = only those keys
+  cancel_key = '<C-c>',     -- temporary in-flight cancel mapping; false disables it
   mask_patterns = { 'token', 'secret', 'password', 'authorization', 'cookie', 'api_key' },
   log = { level = 'warn', keep = 500 },
 })

@@ -168,8 +168,14 @@ via `job:cancel()`, and cleans temp files unless `keep_temp_on_error`.
 ### 3.8 UI and command rules
 
 - `:Rikuesto` is registered lazily by `plugin/rikuesto.lua`; `setup()` only configures.
-- `<Plug>` mappings are always defined; buffer-local leader maps are added on `FileType http` unless
-  `config.keymaps == false`.
+- **No keymaps by default** (`config.keymaps = false`). `<Plug>(rikuesto-*)` mappings are always
+  defined. `keymaps = true` installs the full optional set with the local-leader prefix; a table
+  installs **only** the listed keys (`keymaps = { rr = '<Space>r' }`). Never map a bare key that a user
+  did not ask for, and always set `buffer = true` for buffer-local maps.
+- The only temporary mapping allowed is `config.cancel_key` (default `<C-c>`): installed when a request
+  starts, removed when it finishes, and skipped when the user already owns that lhs.
+- A user cancel must surface as `error.kind == 'cancelled'` (not as a curl failure) so the
+  response window and badges can tell it apart from a transport error.
 - Response window is a non-modifiable scratch buffer (`filetype=rikuesto-response`, or `json`).
 - Result badges are virtual text via a dedicated extmark namespace.
 - `:checkhealth rikuesto` must report curl version + `%{json}` capability, jq/oxfmt presence, JS

@@ -106,7 +106,7 @@
   content_type = { mime = 'application/json', charset = 'utf-8' },
   duration_ms = 123.4, size = 292, url_effective = 'https://...', redirects = 0,
   raw_headers = '...',
-  error = nil,                   -- 失败时 { kind = 'timeout'|'curl'|'network', message = '...' }
+  error = nil,                   -- 失败时 { kind = 'timeout'|'cancelled'|'network'|'curl', message = '...' }
 }
 ```
 

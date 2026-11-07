@@ -593,20 +593,29 @@ curl 执行 → [response handler JS] → globals 落 state → 断言结果进 
 | `:Rikuesto response {open\|close\|last}` | 响应窗口 |
 | `:checkhealth rikuesto` | 依赖与解析器自检 |
 
-### 11.2 默认键位（仅在 `filetype ∈ {http, rest}` 且 `bufname` 为文件时生效，`<Plug>` 优先）
+### 11.2 键位：默认全关，可选开启
 
-| 默认 | 动作 | `<Plug>` |
-|---|---|---|
-| `<localleader>rr` | run | `<Plug>(rikuesto-run)` |
-| `<localleader>ra` | run all | `<Plug>(rikuesto-run-all)` |
-| `<localleader>rc` | copy curl | `<Plug>(rikuesto-copy-curl)` |
-| `<localleader>rf` | format | `<Plug>(rikuesto-format)` |
-| `<localleader>re` | env 切换 | `<Plug>(rikuesto-env)` |
-| `<localleader>rl` | 请求列表 | `<Plug>(rikuesto-list)` |
-| `<localleader>rx` | cancel | `<Plug>(rikuesto-cancel)` |
-| `<localleader>rv` | vars | `<Plug>(rikuesto-vars)` |
+**插件默认不安装任何快捷键**（`keymaps = false`）。所有动作都有 `:Rikuesto …` 命令和
+`<Plug>(rikuesto-*)` 映射，键位完全由用户决定。
 
-`setup({ keymaps = false })` 全关；`<localleader>` 不存在时回退 `<leader>`。
+| 配置 | 效果 |
+|---|---|
+| `keymaps = false`（默认） | 不安装任何缓冲区键位 |
+| `keymaps = true` | 安装完整可选集合，前缀为 `maplocalleader`（回退 `leader`）：`rr` run、`ra` run all、`rc` copy curl、`rf` format、`re` env、`rl` list、`rx` cancel、`rv` vars |
+| `keymaps = { rr = '<Space>r', rc = '<Space>c' }` | **只**安装列出的动作，使用给定 lhs；未列出的动作不映射 |
+| `keymaps = { rr = false }` 等价于不列该项 | 不映射该动作，并清掉上一次 attach 遗留的默认 lhs |
+
+取消在途请求：`cancel_key`（默认 `<C-c>`）在请求开始时安装为**临时**缓冲区映射，响应返回后立即移除；
+若用户已有该 lhs 的映射则不覆盖。`:Rikuesto cancel` 始终可用，与 `keymaps`/`cancel_key` 无关。
+
+示例（只绑三个键）：
+
+```lua
+require('rikuesto').setup({
+  keymaps = { rr = '<Space>r', rc = '<Space>c', re = '<Space>e' },
+  cancel_key = '<C-c>',
+})
+```
 
 ### 11.3 响应窗口
 
