@@ -170,7 +170,10 @@ end
 
 local handlers = {}
 
-function handlers.run(args)
+-- `dispatch()` hands every handler the parsed command opts table, so `run` must read
+-- `opts.args`; taking a bare string here made `:Rikuesto run` fall into the named-request branch.
+handlers.run = function(opts)
+  local args = (opts and opts.args) or ''
   if args == 'all' then
     notify.info('running all requests…')
     exec.run_all(0, { quiet = false })

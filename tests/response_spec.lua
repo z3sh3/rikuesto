@@ -172,7 +172,7 @@ do
     t.contains(network.error.message, 'Could not resolve host', 'network message from stderr')
 
     local cancelled = parse_case({}, { cancelled = true, exit_code = -1 })
-    t.eq(cancelled.error and cancelled.error.kind, 'curl', 'cancel keeps the curl kind')
+    t.eq(cancelled.error and cancelled.error.kind, 'cancelled', 'cancel has its own error kind')
     t.eq(cancelled.error and cancelled.error.message, 'request cancelled', 'cancel message')
 
     local nothing = parse_case({})

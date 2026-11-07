@@ -137,8 +137,9 @@ local function clip_utf8(text, max)
 end
 
 local function classify(meta, has_metadata)
+    -- A user cancel is not a transport failure: keep it distinguishable so the UI can say so.
     if meta.cancelled then
-        return { kind = 'curl', message = 'request cancelled' }
+        return { kind = 'cancelled', message = 'request cancelled' }
     end
     local code = to_number(meta.exit_code) or 0
     local message = first_line(meta.stderr)

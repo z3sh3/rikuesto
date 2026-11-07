@@ -96,7 +96,8 @@ function M.open(response, ctx)
   local error = response.error
   local lines = {}
   if error then
-    lines[#lines + 1] = ('FAILED  %s  %s'):format(error.kind or 'error', error.message or '')
+    local label = (error.kind == 'cancelled') and 'CANCELLED' or 'FAILED'
+    lines[#lines + 1] = ('%s  %s  %s'):format(label, error.kind or 'error', error.message or '')
   end
   lines[#lines + 1] = reason_line(response, ctx)
   lines[#lines + 1] = ''

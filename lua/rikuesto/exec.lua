@@ -284,13 +284,17 @@ end
 --- Run one request. opts.async = false makes it synchronous (used by the integration test).
 function M.run_request(request, result, bufnr, opts)
   opts = opts or {}
-  bufnr = bufnr or 0
+  -- 0 means "current buffer" for the nvim API, but state/extmark are keyed by real buffer numbers.
+  if not bufnr or bufnr == 0 then
+    bufnr = vim.api.nvim_get_current_buf()
+  end
   local spec = M.prepare(request, result, bufnr)
   local notifications = {}
   local finished, response_out = false, nil
 
   state.job = require('rikuesto.http.runner').run(spec, spec.meta.ctx, function(response, err)
     finished = true
+    require('rikuesto.keymaps').remove_cancel(bufnr)
     if not response then
       response = { ok = false, status = 0, headers = {}, body = '', error = { kind = 'curl', message = tostring(err) } }
     end
@@ -319,6 +323,10 @@ function M.run_request(request, result, bufnr, opts)
       end
     end
   end)
+
+  -- `<C-c>` cancels the in-flight request; the mapping only exists while it runs, so the plugin
+  -- still installs no permanent default shortcuts.
+  require('rikuesto.keymaps').install_cancel(bufnr)
 
   if opts.async == false then
     local guard = 0

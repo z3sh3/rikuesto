@@ -59,7 +59,13 @@ M.defaults = {
     extmark = { enabled = true },
     statusline = { enabled = true },
   },
-  keymaps = true,
+  -- Defaults are OFF: the plugin installs no shortcuts unless you opt in,
+  -- either with `keymaps = true` (full default set, local-leader prefixed) or a
+  -- table such as `keymaps = { rr = '<Space>r', rc = '<Space>c' }` (only those keys).
+  keymaps = false,
+  -- Temporary buffer-local mapping installed only while a request is in flight.
+  -- Set to `false` to rely on :Rikuesto cancel alone.
+  cancel_key = '<C-c>',
   mask_patterns = { 'token', 'secret', 'password', 'authorization', 'cookie', 'api_key' },
   log = { level = 'warn', keep = 500 },
 }
