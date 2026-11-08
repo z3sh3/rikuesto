@@ -58,6 +58,9 @@ M.defaults = {
       layout = 'right', -- right | bottom | top | left | float (vsplit -> right, split/botright -> bottom)
       size = 0.4,
       open = 'auto', -- auto | always | never
+      -- Initial view of the response buffer: all | header | body | script. H/B/S/A switch
+      -- inside the buffer, J/K walk the same order; the last choice sticks for the session.
+      view = 'all',
       max_bytes = 2097152,
     },
     extmark = { enabled = true },

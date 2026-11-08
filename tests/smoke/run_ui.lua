@@ -275,6 +275,106 @@ do
     config_mod.setup({})
 end
 
+-- 11b. response views: H/B/S/A jump, J/K walk the order, and the keys stay buffer-local
+--      (regression: the response buffer used to be one flat block with no way to split it up)
+do
+  local rw = require('rikuesto.ui.response_win')
+  local config_mod = require('rikuesto.config')
+  local fake = {
+    status = 200,
+    reason = 'OK',
+    headers = { { name = 'Content-Type', value = 'application/json' } },
+    body = '{"a":1}',
+    json = { a = 1 },
+    ok = true,
+    script_logs = { 'log line from js' },
+    script_tests = { { name = 'has a body', pass = true } },
+    assertions = { { raw = 'status == 200', pass = true } },
+  }
+  local http_buf = vim.api.nvim_get_current_buf()
+  config_mod.setup({ log = { level = 'error' }, ui = { response = { open = 'never' } } })
+  rw.reset()
+  rw.open(fake, { request = { method = 'GET', url = 'https://example.com' } })
+  local resp_buf = vim.api.nvim_get_current_buf()
+  local function text()
+    return table.concat(vim.api.nvim_buf_get_lines(resp_buf, 0, -1, false), '\n')
+  end
+  local function press(key)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), 'x', false)
+  end
+  local function mapped(target)
+    local keys = {}
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(target, 'n')) do
+      keys[map.lhs] = true
+    end
+    return keys
+  end
+
+  check(rw.view() == 'all', 'a fresh response opens in the all view')
+  check(text():find('--- headers', 1, true) ~= nil and text():find('--- body', 1, true) ~= nil,
+    'the all view holds headers and body')
+  check(text():find('log line from js', 1, true) == nil, 'the all view excludes script output')
+  local resp_keys = mapped(resp_buf)
+  for _, key in ipairs({ 'H', 'B', 'S', 'A', 'J', 'K' }) do
+    check(resp_keys[key] == true, 'the response buffer maps ' .. key)
+  end
+  local http_keys = mapped(http_buf)
+  check(http_keys.H == nil and http_keys.B == nil and http_keys.S == nil and http_keys.A == nil
+    and http_keys.J == nil and http_keys.K == nil, 'no view keys leak into the .http buffer')
+
+  press('H')
+  check(rw.view() == 'header', 'H shows the header view')
+  check(text():find('Content-Type: application/json', 1, true) ~= nil, 'the header view lists the headers')
+  check(text():find('--- body', 1, true) == nil, 'the header view has no body')
+  press('S')
+  check(rw.view() == 'script' and text():find('log line from js', 1, true) ~= nil, 'S shows the script view')
+  press('B')
+  check(rw.view() == 'body' and text():find('--- headers', 1, true) == nil, 'B shows the body view')
+  check(text():find('--- body', 1, true) == nil, 'the body view has no `--- body ---` title line')
+  check(text():sub(1, 1) == '{', 'the body view starts with the body itself')
+  press('A')
+  check(rw.view() == 'all', 'A returns to the all view')
+
+  press('J')
+  check(rw.view() == 'header', 'J from all wraps to header')
+  press('J')
+  check(rw.view() == 'body', 'J walks header -> body')
+  press('K')
+  check(rw.view() == 'header', 'K walks back to header')
+  press('K')
+  check(rw.view() == 'all', 'K from header wraps to all')
+
+  -- `ui.response.view` seeds the first window of a session
+  rw.close()
+  config_mod.setup({ log = { level = 'error' }, ui = { response = { open = 'never', view = 'body' } } })
+  rw.reset()
+  rw.open(fake, { request = { method = 'GET', url = 'https://example.com' } })
+  check(rw.view() == 'body', 'ui.response.view seeds the opening view')
+  rw.close()
+  config_mod.setup({})
+end
+
+-- 11c. `:Rikuesto response <view>` reaches the same views by command
+do
+  local rw = require('rikuesto.ui.response_win')
+  local state = require('rikuesto.state')
+  rw.reset()
+  state.last = {
+    request = { method = 'GET', url = 'https://example.com' },
+    response = { status = 200, reason = 'OK', headers = {}, body = '{}', ok = true },
+  }
+  require('rikuesto.commands').dispatch({ args = 'response header', bang = false })
+  check(rw.is_open() and rw.view() == 'header', ':Rikuesto response header opens the header view')
+  require('rikuesto.commands').dispatch({ args = 'response script', bang = false })
+  check(rw.view() == 'script', ':Rikuesto response script switches the open window')
+  require('rikuesto.commands').dispatch({ args = 'response nonsense', bang = false })
+  check(rw.view() == 'script', 'an unknown view name changes nothing')
+  rw.close()
+  require('rikuesto.commands').dispatch({ args = 'response', bang = false })
+  check(rw.is_open() and rw.view() == 'script', 'the selected view sticks across close/reopen')
+  rw.close()
+end
+
 -- 12. health module
 do
   local ok, err = pcall(function()

@@ -180,6 +180,11 @@ via `job:cancel()`, and cleans temp files unless `keep_temp_on_error`.
   did not ask for, and always set `buffer = true` for buffer-local maps.
 - The only temporary mapping allowed is `config.cancel_key` (default `<C-c>`): installed when a request
   starts, removed when it finishes, and skipped when the user already owns that lhs.
+- The **only** permanent bare keys live in the response buffer, which is a plugin-owned scratch buffer:
+  `H`/`B`/`S`/`A` select the `header`/`body`/`script`/`all` view, `J`/`K` walk that order, `q` closes.
+  They are installed with `buffer = <response bufnr>` and must never exist in `.http` buffers.
+  `ui.response.view` (default `all`) only seeds the first window; the `response.script_logs`,
+  `script_tests` and `script_errors` fields belong to the `script` view and are excluded from `all`.
 - A user cancel must surface as `error.kind == 'cancelled'` (not as a curl failure) so the
   response window and badges can tell it apart from a transport error.
 - Response window is a non-modifiable scratch buffer (`filetype=rikuesto-response`, or `json`) and

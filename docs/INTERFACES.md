@@ -287,8 +287,31 @@ json_internal.pretty(text, indent)  -- -> string（保序、无精度损失；�
 ## 8. ui 模块（`rikuesto.ui.*`）
 
 ```lua
-require('rikuesto.ui.response_win').open(response, ctx)   -- ctx={ method=, url=, duration_ms= }
-require('rikuesto.ui.response_win').close()
+local rw = require('rikuesto.ui.response_win')
+--- 渲染并打开（已开则复用窗口）；视图为 sticky：沿用上一次的视图，首次取 ui.response.view
+rw.open(response, ctx)                -- ctx={ request={ method=, url= } }
+rw.close()
+rw.is_open()                          -- -> boolean
+rw.reopen(view?)                      -- -> boolean（用 state.last 重开；view 可选）
+rw.view()                             -- -> 'all'|'header'|'body'|'script'
+rw.set_view(view)                     -- -> string|nil（无内容或名字非法时 nil）
+rw.reset()
+
+local rv = require('rikuesto.ui.response_view')   -- 纯渲染，无窗口/缓冲区依赖
+rv.ORDER                              -- { 'header', 'body', 'script', 'all' }
+rv.DEFAULT                            -- 'all'
+rv.normalize(name)                    -- 'H'|'header'|'HEADER' -> 'header'；非法 -> nil
+rv.configured()                       -- ui.response.view，非法值回退 'all'
+rv.step(view, delta)                  -- 相邻视图，两端环绕（delta 默认 1 = J，-1 = K）
+rv.lines(response, ctx, view)         -- -> string[]
+```
+
+响应 buffer 的按键（**buffer-local**，只在该 buffer 存在）：`H`/`B`/`S`/`A` 直接跳到 `header`/`body`/`script`/`all`，
+`J`/`K` 按 `ORDER` 切到相邻视图，`q` 关闭。当前视图同时写入 buffer 名 `rikuesto://response/<view>`。
+`script` 视图的内容来自 `response.script_logs` / `script_tests` / `script_errors`（pre-request 与
+response-handler 两个阶段由 `exec.run_request` 合并）；`all` 视图按定义**不包含**这三项，但包含 `response.assertions`。
+
+```lua
 require('rikuesto.ui.extmark').set_result(bufnr, request, response)
 require('rikuesto.ui.extmark').clear(bufnr)
 require('rikuesto.ui.picker').list(requests, on_select)
@@ -309,5 +332,5 @@ require('rikuesto.ui.statusline').component()             -- lualine 组件
 | 日期 | 变更 | 理由 |
 |---|---|---|
 | 本次 | `Request` 增补 `variables` / `lazy_variables`；`ParseResult` 增补 `file_lazy_variables`，`preamble.lazy_variables`；`request.parse_chunk(chunk, scope)` 增加可选 out-table | 块级 `@var` 与 `:=` 必须有落点（DESIGN §6.1 优先级 3） |
-| 本次 | exporter 新增 `export_argv(spec)` / `resolve_dialect(name)`；`to_string` 改为**最小引号化**（裸命令词 + 按需加引号）；`curl_export.dialect` 默认 `auto`、`mask_secrets` 默认 `false`；删除无效的 `curl_export.inline_body_max` | 「复制为 curl」必须产出可直接执行的命令：不得引用临时文件、不得把真实参数换成 `***`、不得把命令词加引号（DESIGN §7.6） |
+| 本次 | `ui.response_win` 增加 `set_view` / `view` / `reopen(view)`；新增 `ui.response_view`（纯渲染）；`response.script_logs` 正式启用并合并 pre/post 两个阶段；`ui.response.view` 新增（默认 `all`） | 响应 buffer 需要分块查看（header/body/script/all），且按键只能存在于该 buffer（DESIGN §11.3） |
 | 本次 | `tests/helper.lua` `root()` 修正为 `:p:h:h` | 原实现指向仓库父目录，导致 `tests/run.lua` 扫到 0 个 spec |

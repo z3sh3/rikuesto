@@ -186,19 +186,33 @@ local function cmd_vars()
   vim.cmd('botright sbuffer ' .. buf)
 end
 
+--- `:Rikuesto response [open|close|last|all|header|body|script]`.
+--- A view name reopens the last response in that view when the window is closed, so the views are
+--- reachable by command as well as by the buffer-local H/B/S/A and J/K keys.
 local function cmd_response(action)
   local win = require('rikuesto.ui.response_win')
+  action = (action or ''):lower()
   if action == 'close' then
     win.close()
-  elseif action == 'last' then
-    if not win.reopen() then
-      notify.warn('no response yet')
-    end
-  else
-    if not win.reopen() then
-      notify.warn('no response yet')
-    end
+    return
   end
+  local view = require('rikuesto.ui.response_view').normalize(action)
+  if view then
+    if win.is_open() and win.set_view(view) then
+      return
+    end
+    if not win.reopen(view) then
+      notify.warn('no response yet')
+    end
+    return
+  end
+  if action == '' or action == 'open' or action == 'last' then
+    if not win.reopen() then
+      notify.warn('no response yet')
+    end
+    return
+  end
+  notify.error(('unknown response view: %s (all|header|body|script|open|close|last)'):format(action))
 end
 
 local handlers = {}
@@ -329,7 +343,8 @@ function handlers.help()
     ':Rikuesto vars           show resolved variables for the cursor request',
     ':Rikuesto log [clear]    open the log buffer',
     ':Rikuesto js [runtime]   show or set the JS runtime (auto|node|deno|none)',
-    ':Rikuesto response [open|close|last]',
+    ':Rikuesto response [all|header|body|script|open|close|last]',
+    '                          show the last response, optionally in one view',
   }
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)

@@ -1,4 +1,6 @@
--- Rendered response viewer (status line + headers + pretty body) in a scratch buffer.
+-- Rendered response viewer in a scratch buffer. The buffer carries one of four views
+-- (`header` / `body` / `script` / `all`, see `ui/response_view.lua`) and switches between them with
+-- buffer-local keys only, so no shortcut leaks into `.http` buffers.
 local M = {}
 
 local config = require('rikuesto.config')
@@ -6,32 +8,16 @@ local state = require('rikuesto.state')
 
 local win = nil
 local buf = nil
+--- What is currently rendered: { response = ..., ctx = ..., view = 'all' }.
+local current = nil
+--- Last view the user selected; survives closing the window so the next response keeps it.
+local sticky_view = nil
 
-local function reason_line(response, ctx)
-  local http_version = response.http_version or '1.1'
-  local status = response.status or 0
-  local reason = response.reason or ''
-  local parts = { ('HTTP/%s %d %s'):format(http_version, status, reason) }
-  if response.duration_ms then
-    parts[#parts + 1] = ('%d ms'):format(math.floor(response.duration_ms + 0.5))
-  end
-  if response.size then
-    parts[#parts + 1] = ('%d B'):format(response.size)
-  end
-  if response.redirects and response.redirects > 0 then
-    parts[#parts + 1] = ('%d redirect(s)'):format(response.redirects)
-  end
-  if ctx and ctx.request then
-    parts[#parts + 1] = ('%s %s'):format(ctx.request.method or 'GET', response.url_effective or ctx.request.url or '')
-  end
-  return table.concat(parts, '  ·  ')
-end
+--- Keys are buffer-local and fixed: they only exist inside the response buffer.
+local VIEW_KEYS = { H = 'header', B = 'body', S = 'script', A = 'all' }
 
-local function body_lines(response)
-  local body = response.body or ''
-  local json_internal = require('rikuesto.format.json_internal')
-  local pretty = json_internal.pretty(body, config.get().format.indent or 2)
-  return vim.split(pretty ~= '' and pretty or '', '\n', { plain = true })
+local function views()
+  return require('rikuesto.ui.response_view')
 end
 
 local function release()
@@ -114,89 +100,100 @@ local function ensure_window()
   end
   vim.wo[win].cursorline = false
   vim.wo[win].conceallevel = 0
-  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', '', {
-    noremap = true,
-    silent = true,
-    callback = function()
-      M.close()
-    end,
-  })
+  -- `q` closes; H/B/S/A jump to a view and J/K walk the H→B→S→A order. Buffer-local on
+  -- purpose: the response buffer is the only place these keys exist.
+  vim.keymap.set('n', 'q', function()
+    M.close()
+  end, { buffer = buf, nowait = true, silent = true, desc = 'rikuesto: close response' })
+  for key, name in pairs(VIEW_KEYS) do
+    vim.keymap.set('n', key, function()
+      M.set_view(name)
+    end, { buffer = buf, silent = true, desc = 'rikuesto: response ' .. name })
+  end
+  vim.keymap.set('n', 'J', function()
+    M.set_view(views().step(M.view(), 1))
+  end, { buffer = buf, silent = true, desc = 'rikuesto: next response view' })
+  vim.keymap.set('n', 'K', function()
+    M.set_view(views().step(M.view(), -1))
+  end, { buffer = buf, silent = true, desc = 'rikuesto: previous response view' })
   return win
 end
 
---- Render a response into the response buffer.
-function M.open(response, ctx)
-  ctx = ctx or {}
-  local error = response.error
-  local lines = {}
-  if error then
-    local label = (error.kind == 'cancelled') and 'CANCELLED' or 'FAILED'
-    lines[#lines + 1] = ('%s  %s  %s'):format(label, error.kind or 'error', error.message or '')
+--- Redraw the buffer for the current view and mirror the view in the buffer name, so the
+--- status line always says which block you are looking at.
+local function render()
+  if not current or not buf or not vim.api.nvim_buf_is_valid(buf) then
+    return
   end
-  lines[#lines + 1] = reason_line(response, ctx)
-  lines[#lines + 1] = ''
-  lines[#lines + 1] = ('--- headers (%d) ---'):format(#(response.headers or {}))
-  for _, header in ipairs(response.headers or {}) do
-    lines[#lines + 1] = ('%s: %s'):format(header.name, header.value)
-  end
-  local body = body_lines(response)
-  lines[#lines + 1] = ''
-  lines[#lines + 1] = ('--- body%s ---'):format(response.truncated and ' (truncated)' or '')
-  for _, line in ipairs(body) do
-    lines[#lines + 1] = line
-  end
-
-  if response.script_tests and #response.script_tests > 0 then
-    lines[#lines + 1] = ''
-    lines[#lines + 1] = '--- script tests ---'
-    for _, test in ipairs(response.script_tests) do
-      lines[#lines + 1] = ('%s  %s%s'):format(test.pass and '[pass]' or '[FAIL]', test.name or '?',
-        test.message and ('  ' .. test.message) or '')
-    end
-  end
-  if response.assertions and #response.assertions > 0 then
-    lines[#lines + 1] = ''
-    lines[#lines + 1] = '--- assertions ---'
-    for _, assertion in ipairs(response.assertions) do
-      lines[#lines + 1] = ('%s  %s'):format(assertion.pass and '[pass]' or '[FAIL]', assertion.raw or '')
-    end
-  end
-  if response.script_errors and #response.script_errors > 0 then
-    lines[#lines + 1] = ''
-    lines[#lines + 1] = '--- script errors ---'
-    for _, script_error in ipairs(response.script_errors) do
-      lines[#lines + 1] = tostring(script_error.message or script_error)
-    end
-  end
-
-  local target = ensure_window()
+  local lines = views().lines(current.response, current.ctx, current.view)
   vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].modifiable = false
-  vim.bo[buf].filetype = (response.json and 'json' or 'rikuesto-response')
+  vim.bo[buf].filetype = (current.response.json and current.view ~= 'header') and 'json' or 'rikuesto-response'
+  pcall(vim.api.nvim_buf_set_name, buf, ('rikuesto://response/%s'):format(current.view))
+  if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf then
+    pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+  end
+end
+
+--- Render a response into the response buffer.
+--- The selected view is sticky for the session: the configured `ui.response.view` seeds the first
+--- window, and whatever the user pressed last applies to the next response.
+function M.open(response, ctx)
+  current = {
+    response = response or {},
+    ctx = ctx or {},
+    view = sticky_view or views().configured(),
+  }
+  local target = ensure_window()
+  render()
   return target
+end
+
+--- Current view name.
+function M.view()
+  return current and current.view or views().configured()
+end
+
+--- Switch the open response buffer to another view.
+--- @return string|nil the view actually shown, nil when nothing is rendered or the name is unknown
+function M.set_view(view)
+  local name = views().normalize(view)
+  if not current or not name then
+    return nil
+  end
+  current.view = name
+  sticky_view = name
+  render()
+  return name
 end
 
 function M.close()
   release()
+  current = nil
 end
 
 function M.is_open()
   return win ~= nil and vim.api.nvim_win_is_valid(win)
 end
 
---- Show the last response again (used by :Rikuesto response last).
-function M.reopen()
+--- Show the last response again (used by :Rikuesto response last and by view switching after
+--- the window was closed). An explicit `view` overrides the sticky one.
+function M.reopen(view)
   local last = state.last
   if not last or not last.response then
     return false
   end
   M.open(last.response, { request = last.request })
+  local name = views().normalize(view)
+  if name then
+    M.set_view(name)
+  end
   return true
 end
 
 function M.reset()
-  win, buf = nil, nil
+  win, buf, current, sticky_view = nil, nil, nil, nil
 end
 
 return M

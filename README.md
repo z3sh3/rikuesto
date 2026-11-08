@@ -157,6 +157,7 @@ Content-Type: application/json
 | `:Rikuesto vars` | Show the variables resolved for the cursor request (secrets masked) |
 | `:Rikuesto js [runtime]` | Show or set the JS runtime (`auto`, `node`, `deno`, `none`) |
 | `:Rikuesto response [open\|close\|last]` | Reopen or close the response window |
+| `:Rikuesto response [all\|header\|body\|script]` | Show the last response in one view |
 | `:Rikuesto log [clear]` | Open the diagnostic log buffer |
 | `:Rikuesto help` | List the commands (also the no-argument form) |
 
@@ -248,7 +249,7 @@ require('rikuesto').setup({
     mask_secrets = false, -- true replaces secrets with *** (the command stops running)
   },
   ui = {
-    response = { layout = 'right', size = 0.4, open = 'auto', max_bytes = 2097152 },
+    response = { layout = 'right', size = 0.4, open = 'auto', view = 'all', max_bytes = 2097152 },
     extmark = { enabled = true },
   },
   keymaps = false,          -- no shortcuts by default; true = full set, table = only those keys
@@ -378,6 +379,28 @@ Since parsing, formatting and completion never use tree-sitter, a missing parser
 
 After a request the response opens in a split and renders the status line, headers and a pretty body
 (JSON is decoded, `HEAD` responses show no body). Press `q` to close it.
+
+### Views
+
+The response buffer can show one block at a time. The keys below are **buffer-local**: they only exist
+inside the response buffer, never in your `.http` files, and need no configuration.
+
+| Key | View | Content |
+|---|---|---|
+| `A` | `all` (**default**) | status line + headers + body + `??` assertions; no script output |
+| `H` | `header` | status line (`HTTP/1.1 200 OK · 132 ms · 1.2 KB`) + every response header |
+| `B` | `body` | the body, JSON pretty-printed, with no `--- body ---` title line (the body fills the whole view); a clipped body starts with `(truncated)` |
+| `S` | `script` | what your JS produced: `console.log` output, `client.test` results, script errors (pre-request and response-handler phases merged) |
+| `J` / `K` | next / previous | walk the `header → body → script → all` order, wrapping at both ends |
+
+The current view is also written into the buffer name (`rikuesto://response/<view>`), so the status
+line shows where you are. `ui.response.view` seeds the first window of a session; after that your last
+choice sticks for the next response, and `:Rikuesto response <view>` does the same thing by command
+(it reopens the last response in that view when the window is closed).
+
+```lua
+require('rikuesto').setup({ ui = { response = { view = 'body' } } })
+```
 
 | `ui.response.layout` | Placement |
 |---|---|

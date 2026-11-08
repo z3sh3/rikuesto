@@ -128,6 +128,21 @@ local function js_payload(phase, script, request, scope, response, bufnr)
   return payload
 end
 
+--- Append one phase's list to another's, without mutating either (both belong to a spec).
+--- @param first table|nil
+--- @param second table|nil
+--- @return table
+function M.merge_script_list(first, second)
+  local out = {}
+  for _, item in ipairs(first or {}) do
+    out[#out + 1] = item
+  end
+  for _, item in ipairs(second or {}) do
+    out[#out + 1] = item
+  end
+  return out
+end
+
 --- Execute pre/post JS scripts. Returns aggregated { vars, globals, logs, tests, errors }.
 function M.run_scripts(request, scope, response, bufnr)
   local aggregate = { vars = {}, globals = {}, logs = {}, tests = {}, errors = {} }
@@ -301,9 +316,12 @@ function M.run_request(request, result, bufnr, opts)
     response_out = response
     local scope = spec.meta.scope
     local post = M.run_scripts(spec.meta.request, scope, response, bufnr)
-    response.script_tests = post.tests
-    response.script_errors = post.errors
-    response.script_logs = post.logs
+    -- The `script` view is "everything the scripts produced", both phases included: a pre-request
+    -- script's console.log is as interesting as a response handler's.
+    local pre = spec.meta.scripts or {}
+    response.script_logs = M.merge_script_list(pre.logs, post.logs)
+    response.script_tests = M.merge_script_list(pre.tests, post.tests)
+    response.script_errors = M.merge_script_list(pre.errors, post.errors)
     response.assertions = M.eval_assertions(response, request.assertions)
     state.record_result(bufnr, request, response)
     state.remember_request(request.name, response)

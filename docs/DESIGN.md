@@ -614,6 +614,7 @@ curl 执行 → [response handler JS] → globals 落 state → 断言结果进 
 | `:Rikuesto log [clear]` | 日志 |
 | `:Rikuesto js runtime {auto\|node\|deno\|none}` | 查看/切换 JS 运行时 |
 | `:Rikuesto response {open\|close\|last}` | 响应窗口 |
+| `:Rikuesto response {all\|header\|body\|script}` | 直接打开/切换到某个视图 |
 | `:checkhealth rikuesto` | 依赖与解析器自检 |
 
 ### 11.2 键位：默认全关，可选开启
@@ -645,6 +646,21 @@ require('rikuesto').setup({
 - 布局：`ui.response.layout`，取值为 `right`（**默认，右侧垂直 split**）/ `bottom` / `top` / `left` / `float`；`size` 表示占比（垂直布局是宽度、水平布局是高度）。别名：`vsplit`→`right`、`split`/`botright`→`bottom`、其他非法值回退 `right`。
   - 实现注意：`:vsbuffer` 不是合法 Ex 命令（会报 `E492`），正确做法是先 `vsplit`/`split` 再 `nvim_win_set_buf()`；位置用 `topleft`/`belowright` 修饰符控制。实测：`right→右侧`、`bottom→下方`、`top→上方`、`left→左侧`。
 - 内容顺序：`状态行`（含 HTTP 版本/状态码/原因/耗时/大小/重定向）→ 空行 → `响应头`（折叠）→ 空行 → `body`。
+- 视图（`ui/response_view.lua`，纯渲染，可在无窗口状态下单测）：响应 buffer 可以只显示其中一块，而不再是一整块滚动内容。
+
+  | 视图 | 内容 | 快捷键 |
+  |---|---|---|
+  | `header` | 状态行 + 全部响应头 | `H` |
+  | `body` | body（JSON 美化，**不加 `--- body ---` 标题行**，因为整屏都是它；截断时首行 `(truncated)`） | `B` |
+  | `script` | 脚本产物：`console.log` 输出（`--- script output ---`）、`client.test` 结果、脚本错误；pre-request 与 response handler 两个阶段合并 | `S` |
+  | `all`（默认） | 状态行 + 响应头 + `--- body ---` + body + `??` 断言，**不含**任何脚本内容 | `A` |
+
+  `J`/`K` 按上表顺序在相邻视图之间切换（两端环绕：`all` + `J` → `header`，`header` + `K` → `all`）。
+  按键是**buffer-local** 的，只存在于响应 buffer；`.http` buffer 一个都不会多。
+  当前视图同时写进 buffer 名（`rikuesto://response/<view>`），状态栏一眼可见。
+  `ui.response.view` 决定本次会话第一个窗口的初始视图，之后用户上一次按下的视图会沿用（sticky）；
+  `:Rikuesto response <view>` 等效于按键，窗口关着时会直接以该视图重开上一次响应。
+  传输错误（`FAILED`/`CANCELLED`）在每个视图顶部都显示一行，否则空视图看起来就像「没内容」。
 - 语法：body 为 JSON 时 `filetype=json`（复用 treesitter），否则 `rikuesto-response`（自定义 filetype，`syntax` 关键字文件，不引入额外 parser）。
 - 交互：`q` 关闭、`<CR>` 在折叠上切换、`gf`/`<CR>` 打开外部 body 文件、`y` 复制 body。
 - extmark：请求首行虚拟文本右侧显示上次结果 `200 · 132ms · 1.2KB`；失败红色。使用独立 namespace，`nvim_buf_set_extmark(..., {virt_text_pos="eol"})`，随 `changedtick` 失效重算。
@@ -722,7 +738,7 @@ require('rikuesto').setup({
     mask_secrets = false,            -- 打开后 `***` 顶替密钥（命令将不可执行）
   },
   ui = {
-    response = { layout = 'right', size = 0.4, open = 'auto' },
+    response = { layout = 'right', size = 0.4, open = 'auto', view = 'all' },
     extmark = { enabled = true },
     statusline = { enabled = true },
   },
