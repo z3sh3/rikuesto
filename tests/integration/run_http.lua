@@ -160,21 +160,29 @@ for index, request in ipairs(parsed.requests) do
   end
 end
 
--- Curl export must produce a usable, resolved command for the first request.
+-- Copy as curl must produce a usable, resolved, executable command for the first request.
 do
   local first = parsed.requests[1]
   local spec = exec.prepare(first, parsed, bufnr)
-  local command = exporter.to_string(spec.argv, 'native')
+  local argv, notes = exporter.export_argv(spec)
+  local dialect = exporter.resolve_dialect(nil)
+  local command = exporter.to_string(argv, dialect)
   print('')
-  print('curl export (native) for #01:')
-  for line in (command .. '\n'):gmatch('(.-)\n') do
-    print('  ' .. line)
+  print(('curl export (%s) for #01:'):format(dialect))
+  print('  ' .. command)
+  for _, note in ipairs(notes) do
+    print('  note: ' .. note)
   end
   if command:find('{{', 1, true) then
     fail(0, 'exported curl still contains unresolved variables')
   end
   if not command:find('jsonplaceholder%.typicode%.com') then
     fail(0, 'exported curl is missing the resolved base url')
+  end
+  for _, forbidden in ipairs({ 'headers.txt', 'body.bin', 'writeout.json', '%{json}', '-sS' }) do
+    if command:find(forbidden, 1, true) then
+      fail(0, ('exported curl keeps the response-capture plumbing: %s'):format(forbidden))
+    end
   end
 end
 

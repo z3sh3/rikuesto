@@ -206,7 +206,13 @@ local curl = require('rikuesto.http.curl')
 curl.build(req, ctx)   -- -> spec
 
 local exporter = require('rikuesto.http.exporter')
-exporter.to_string(argv, 'native'|'pwsh'|'sh'|'cmd')   -- -> string
+exporter.to_string(argv, 'native'|'pwsh'|'sh'|'cmd')   -- -> string（最小引号化）
+--- 「复制为 curl」：把运行期 argv 改写成可粘贴执行的命令
+--- 删除 `-sS --no-progress-meter` 与插件自己的 `-D/-o/-w '%{json}'`；
+--- 把 `--data-binary @<tmp>|<file>` 换成 `--data-raw <正文>`；用户自己的 extra_args 不动。
+--- 返回的 notes 是「无法无损内联」的提示，由调用方 notify。
+exporter.export_argv(spec)          -- -> argv: string[], notes: string[]（argv[1] 归一为 `curl` / `curl.exe`）
+exporter.resolve_dialect(name)      -- -> 'pwsh'|'sh'|...（'auto'/nil/'' → 平台 shell）
 exporter.command_line(argv)                            -- -> string（native 空间分隔，用于日志）
 
 local runner = require('rikuesto.http.runner')
@@ -220,6 +226,12 @@ response.parse(paths, meta)   -- -> Response（paths: { headers=..., body=..., w
 local auth = require('rikuesto.http.auth')
 auth.from_url(url)            -- -> { user, pass, clean_url }|nil
 ```
+
+**`to_string` 引号规则**：最小引号化。只有含空白或 shell 元字符（`$`、`` ` ``、`"`、`&`、`|`、`<`、`>`、`;`、`{`、`}`、`,`、`*`、`?`、`(`、`)`）的参数才加引号；`-X`/`POST`/`30`/`--data-raw` 与普通主机名裸写。
+`native`（未知方言的回退）逐行输出 argv、不加引号，**不可执行**，只作参考清单。
+
+**为什么命令词必须是裸词**：PowerShell 里 `'C:\...\curl.EXE' --version` 是 `ParserError`（带引号的词是字符串表达式，不是命令）。
+因此 `export_argv` 把 argv[1] 归一成 `curl` / `curl.exe`；只有 `tools.curl` 指向的二进制不叫 `curl` 时才保留路径，并在 pwsh 方言下补调用运算符 `&`。
 
 **argv 规则（必须与 DESIGN §7.2 一致）**：
 `-sS --no-progress-meter -D <headers> -o <body> -w '%{json}'`；
@@ -297,4 +309,5 @@ require('rikuesto.ui.statusline').component()             -- lualine 组件
 | 日期 | 变更 | 理由 |
 |---|---|---|
 | 本次 | `Request` 增补 `variables` / `lazy_variables`；`ParseResult` 增补 `file_lazy_variables`，`preamble.lazy_variables`；`request.parse_chunk(chunk, scope)` 增加可选 out-table | 块级 `@var` 与 `:=` 必须有落点（DESIGN §6.1 优先级 3） |
+| 本次 | exporter 新增 `export_argv(spec)` / `resolve_dialect(name)`；`to_string` 改为**最小引号化**（裸命令词 + 按需加引号）；`curl_export.dialect` 默认 `auto`、`mask_secrets` 默认 `false`；删除无效的 `curl_export.inline_body_max` | 「复制为 curl」必须产出可直接执行的命令：不得引用临时文件、不得把真实参数换成 `***`、不得把命令词加引号（DESIGN §7.6） |
 | 本次 | `tests/helper.lua` `root()` 修正为 `:p:h:h` | 原实现指向仓库父目录，导致 `tests/run.lua` 扫到 0 个 spec |

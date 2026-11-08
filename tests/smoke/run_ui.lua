@@ -88,6 +88,34 @@ do
   local exported = vim.fn.getreg('+')
   check(exported:find('jsonplaceholder%.typicode%.com') ~= nil, 'copy-curl resolves @base')
   check(exported:find('{{', 1, true) == nil, 'copy-curl has no unresolved placeholders')
+  -- Copy as curl must be runnable: no response-capture plumbing, no file references.
+  for _, forbidden in ipairs({ 'headers.txt', 'body.bin', 'writeout.json', '%{json}', '-sS' }) do
+    check(exported:find(forbidden, 1, true) == nil, 'copy-curl has no ' .. forbidden)
+  end
+  check(exported:sub(1, 1) ~= "'", 'copy-curl does not start with a quoted command word')
+  vim.api.nvim_win_set_cursor(0, { 46, 0 }) -- the JSON POST request
+  require('rikuesto.commands').dispatch({ args = 'curl', bang = true })
+  local posted = vim.fn.getreg('+')
+  check(posted:find('--data%-raw') ~= nil, 'copy-curl inlines the body with --data-raw')
+  check(posted:find('@', 1, true) == nil or posted:find('--data%-raw') ~= nil,
+    'copy-curl does not reference a body file')
+
+  -- The command must actually be executable, which a string comparison cannot prove:
+  -- paste it into the real shell unchanged, with `--version` appended (curl prints its
+  -- version and exits without touching the network). No `&`, no extra quoting: a copied
+  -- command that needs fixing up before it runs is the bug this guards against.
+  local pwsh = vim.fn.exepath('pwsh')
+  if pwsh ~= '' then
+    local result = vim.system({ pwsh, '-NoProfile', '-Command', posted .. ' --version' }):wait(20000)
+    check(result.code == 0, ('copy-curl runs in pwsh unchanged (exit %s)'):format(tostring(result.code)))
+    check(((result.stdout or ''):lower()):find('curl', 1, true) ~= nil,
+      'copy-curl reaches curl with the parsed arguments')
+  end
+  local sh = vim.fn.exepath('sh')
+  if sh ~= '' then
+    local result = vim.system({ sh, '-c', posted .. ' --version' }):wait(20000)
+    check(result.code == 0, ('copy-curl runs in sh unchanged (exit %s)'):format(tostring(result.code)))
+  end
 end
 
 -- 7. `:Rikuesto run` through the real command dispatcher -> response window + extmark + state

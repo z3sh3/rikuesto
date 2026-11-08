@@ -30,17 +30,50 @@ local function run_one(request, result)
   exec.run_request(request, result, 0, { async = true })
 end
 
+--- The command a user can paste back into a shell: the run argv without the
+--- response-capture plumbing and without any file reference (DESIGN §7.6).
+--- @return string|nil command, string[] notes
+local function curl_string(request, result, dialect)
+  if not request then
+    return nil, {}
+  end
+  local spec = exec.prepare(request, result, 0)
+  local exporter = require('rikuesto.http.exporter')
+  local cfg = config.get()
+  local argv, notes = exporter.export_argv(spec)
+  local command = exporter.to_string(argv, exporter.resolve_dialect(dialect or cfg.curl_export.dialect))
+  -- Off by default: the copy is for the user who wrote the request. Hiding a value
+  -- behind `***` produces a command that cannot run at all.
+  if cfg.curl_export.mask_secrets then
+    command = require('rikuesto.util.str').mask(command, cfg.mask_patterns)
+  end
+  notes = notes or {}
+  -- A fully inlined body cannot be shortened without a file reference, so say so instead
+  -- of silently emitting a command Windows will refuse to launch.
+  local platform = require('rikuesto.util.platform')
+  if platform.is_windows and #command > 32000 then
+    notes[#notes + 1] = ('command is %d characters; Windows caps a process command line at 32767'
+      .. ', so pasting it may fail'):format(#command)
+  end
+  return command, notes
+end
+
+--- Public form used by `require('rikuesto').curl()`.
+function M.curl_string(request, result, dialect)
+  return curl_string(request, result, dialect)
+end
+
 local function cmd_curl(opts)
   local result, request = current_context()
   if not request then
     return
   end
-  local spec = exec.prepare(request, result, 0)
-  local exporter = require('rikuesto.http.exporter')
-  local dialect = opts.args or config.get().curl_export.dialect or 'native'
-  local command = exporter.to_string(spec.argv, dialect)
-  if config.get().curl_export.mask_secrets then
-    command = require('rikuesto.util.str').mask(command, config.get().mask_patterns)
+  local command, notes = curl_string(request, result, opts.args)
+  if not command then
+    return
+  end
+  for _, note in ipairs(notes) do
+    notify.warn(note)
   end
   if opts.bang then
     local register = config.get().curl_export.register or '+'
@@ -287,7 +320,7 @@ function handlers.help()
     ':Rikuesto run <name>     run a request by its # @name',
     ':Rikuesto cancel         cancel the in-flight request',
     ':Rikuesto repeat         run the previous request again',
-    ':Rikuesto curl [dialect] print the curl command (native|pwsh|sh|cmd)',
+    ':Rikuesto curl [dialect] print the curl command (auto|native|pwsh|sh|cmd)',
     ':Rikuesto curl!          copy the curl command to the export register',
     ':Rikuesto copy           alias of :Rikuesto curl!',
     ':Rikuesto format         format the buffer',

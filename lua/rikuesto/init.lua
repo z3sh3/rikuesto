@@ -39,9 +39,13 @@ function M.run_all()
   require('rikuesto.commands').dispatch({ args = 'run all' })
 end
 
---- Render the curl command for the cursor request.
+--- Render the curl command for the cursor request (DESIGN §7.6): a pasteable, executable
+--- command with every payload inlined.
 function M.curl(dialect)
-  return require('rikuesto.exec').prepare(select(2, require('rikuesto.exec').context(0, 0)), nil, 0)
+  local exec = require('rikuesto.exec')
+  local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local result, request = exec.context(0, row)
+  return (require('rikuesto.commands').curl_string(request, result, dialect))
 end
 
 function M.copy_curl()

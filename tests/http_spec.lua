@@ -351,12 +351,21 @@ t.module('http.exporter')
 do
     local argv = { 'curl', '-H', 'X-Test: a b', 'https://example.com' }
     t.eq(exporter.to_string(argv, 'native'), table.concat(argv, '\n'), 'native = one argument per line')
-    t.eq(exporter.to_string(argv, 'sh'), "'curl' '-H' 'X-Test: a b' 'https://example.com'", 'sh quoting')
-    t.eq(exporter.to_string({ 'curl', "It's" }, 'pwsh'), "'curl' 'It''s'", 'pwsh doubles single quotes')
-    t.eq(exporter.to_string({ 'curl', "It's" }, 'sh'), "'curl' 'It'\\''s'", 'sh closes/escapes/reopens')
-    t.eq(exporter.to_string({ 'curl', 'a^b', 'say "hi"' }, 'cmd'), '"curl" "a^^b" "say \\"hi\\""',
+    t.eq(exporter.to_string(argv, 'sh'), "curl -H 'X-Test: a b' https://example.com",
+        'sh quotes only the argument that needs it')
+    t.eq(exporter.to_string({ 'curl', "It's" }, 'pwsh'), "curl 'It''s'", 'pwsh doubles single quotes')
+    t.eq(exporter.to_string({ 'curl', "It's" }, 'sh'), "curl 'It'\\''s'", 'sh closes/escapes/reopens')
+    t.eq(exporter.to_string({ 'curl', 'a^b', 'say "hi"' }, 'cmd'), 'curl "a^^b" "say \\"hi\\""',
         'cmd escapes ^ and "')
     t.eq(exporter.to_string(argv, 'nope'), table.concat(argv, '\n'), 'unknown dialect falls back to native')
+    t.eq(exporter.to_string({ 'curl', '', 'a b', 'a;b', 'a*b', 'a{b}' }, 'pwsh'),
+        "curl '' 'a b' 'a;b' 'a*b' 'a{b}'", 'shell metacharacters force quoting')
+    -- A quoted word is a *string expression* in PowerShell, not a command, so a path that
+    -- needs quoting must be introduced by the call operator `&`.
+    t.eq(exporter.to_string({ 'C:\\Program Files\\curl.exe', '-X', 'POST' }, 'pwsh'),
+        "& 'C:\\Program Files\\curl.exe' -X POST", 'pwsh prefixes a quoted command word with &')
+    t.eq(exporter.to_string({ '/opt/my tools/curl', '-X', 'POST' }, 'sh'),
+        "'/opt/my tools/curl' -X POST", 'sh accepts a quoted command word as is')
     t.eq(exporter.command_line({ 'curl', '-X', 'POST' }), 'curl -X POST', 'command_line joins with spaces')
     t.eq(exporter.command_line({}), '', 'command_line of an empty argv')
     t.eq(exporter.command_line({ 'curl', '-H', 'Authorization: Bearer abc', 'https://example.com' }),
@@ -365,6 +374,112 @@ do
         'curl -u *** https://example.com', 'command_line masks -u credentials')
     t.eq(exporter.to_string({ 'curl', '-u', 'alice:s3cret' }, 'native'), 'curl\n-u\nalice:s3cret',
         'copy as curl keeps the real credentials')
+    t.eq(exporter.resolve_dialect(nil), require('rikuesto.util.platform').is_windows and 'pwsh' or 'sh',
+        'auto dialect resolves to the platform shell')
+    t.eq(exporter.resolve_dialect(''), exporter.resolve_dialect('auto'), 'empty dialect means auto')
+    t.eq(exporter.resolve_dialect('sh'), 'sh', 'an explicit dialect is kept')
+end
+
+-- Copy as curl must produce a runnable command: no response-capture plumbing
+-- (`-sS`, `-D`, `-o`, `-w`) and no file reference (regression: the run argv used to be
+-- copied verbatim, so the pasted command wrote temp files and printed metadata).
+do
+    local text = '{"password":"s3cret","note":"' .. string.rep('x', 40) .. '"}'
+    local spec = curl.build({
+        method = 'POST',
+        url = 'https://api.example.com/items',
+        headers = { { name = 'Authorization', value = 'Bearer abc123' } },
+        body = { kind = 'json', text = text },
+        meta = {},
+    }, context({ inline_body_max = 16 }))
+    t.eq(#spec.temp_files, 4, 'the run argv really does use a payload temp file')
+    local argv, notes = exporter.export_argv(spec)
+    t.eq(#notes, 0, 'an inline-able payload needs no note')
+    t.eq(exporter.to_string(argv, 'sh'), table.concat({
+        'curl', '-X', 'POST', '-L', '--max-time', '30',
+        '-H', "'Authorization: Bearer abc123'",
+        '--data-raw', "'" .. text .. "'",
+        'https://api.example.com/items',
+    }, ' '), 'export inlines the body and drops every capture flag')
+    for _, flag in ipairs({ '-sS', '--no-progress-meter', '-D', '-o', '-w', '--write-out' }) do
+        t.eq(index_of(argv, flag), nil, 'export contains no ' .. flag)
+    end
+    for _, arg in ipairs(argv) do
+        t.eq(arg:find('payload.bin', 1, true), nil, 'export references no temp file')
+    end
+    cleanup(spec)
+end
+
+-- `< ./body.json`: the file reference is replaced by the file's bytes.
+do
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, 'p')
+    local path = dir .. '/body.json'
+    vim.fn.writefile({ '{"a":1}' }, path)
+    local spec = curl.build({
+        method = 'PUT',
+        url = 'https://api.example.com/raw',
+        headers = {},
+        body = { kind = 'external', file = path },
+        meta = {},
+    }, context())
+    local argv, notes = exporter.export_argv(spec)
+    -- `readfile(..., 'b')` keeps the file's trailing newline as an empty last line, so the
+    -- inlined body is byte-identical to what `--data-binary @file` used to send.
+    t.same({ 'curl', '-X', 'PUT', '-L', '--max-time', '30', '--data-raw', '{"a":1}\n',
+        'https://api.example.com/raw' }, argv, 'external body is inlined, not referenced')
+    t.eq(#notes, 1, 'inlining an external file is reported')
+    vim.fn.delete(path, 'rf')
+    cleanup(spec)
+end
+
+-- The copied command starts with a command word, not with the resolved binary path: a
+-- quoted path is a ParserError in PowerShell and noise in every other shell.
+do
+    local spec = curl.build({
+        method = 'GET',
+        url = 'https://api.example.com/x',
+        headers = {},
+        body = { kind = 'none' },
+        meta = {},
+    }, context({ curl_bin = 'C:\\Program Files\\Git\\ucrt64\\bin\\curl.EXE' }))
+    local argv = exporter.export_argv(spec)
+    t.eq(argv[1], 'curl.exe', 'the resolved curl path becomes the curl.exe command word')
+    t.eq(exporter.to_string(argv, 'pwsh'), 'curl.exe -L --max-time 30 https://api.example.com/x',
+        'a plain GET needs no quoting at all')
+    cleanup(spec)
+end
+
+-- An override that is not a curl binary keeps its path (and pwsh then needs `&`).
+do
+    local spec = curl.build({
+        method = 'GET',
+        url = 'https://api.example.com/x',
+        headers = {},
+        body = { kind = 'none' },
+        meta = {},
+    }, context({ curl_bin = 'D:\\my tools\\curlish.exe' }))
+    local argv = exporter.export_argv(spec)
+    t.eq(argv[1], 'D:\\my tools\\curlish.exe', 'a non-curl override keeps its full path')
+    t.eq(exporter.to_string(argv, 'pwsh'),
+        "& 'D:\\my tools\\curlish.exe' -L --max-time 30 https://api.example.com/x",
+        'pwsh runs a quoted path through the call operator')
+    cleanup(spec)
+end
+
+-- User-supplied extra_args are preserved verbatim, including a deliberate -o.
+do
+    local spec = curl.build({
+        method = 'GET',
+        url = 'https://api.example.com/x',
+        headers = {},
+        body = { kind = 'none' },
+        meta = {},
+    }, context({ extra_args = { '-o', 'keep.txt', '-v' } }))
+    local argv = exporter.export_argv(spec)
+    t.eq(index_of(argv, '-o') ~= nil, true, 'a user -o from curl.extra_args survives')
+    t.eq(index_of(argv, '-v') ~= nil, true, 'a user -v from curl.extra_args survives')
+    cleanup(spec)
 end
 
 t.finish()

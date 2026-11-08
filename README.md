@@ -148,7 +148,7 @@ Content-Type: application/json
 | `:Rikuesto run <name>` | Run the request declared with `# @name <name>` |
 | `:Rikuesto cancel` | Cancel the request in flight |
 | `:Rikuesto repeat` | Run the previous request again |
-| `:Rikuesto curl [dialect]` | Print the curl command (`native`, `pwsh`, `sh`, `cmd`) |
+| `:Rikuesto curl [dialect]` | Print the curl command (`auto`, `pwsh`, `sh`, `cmd`, `native`) |
 | `:Rikuesto curl!` / `:Rikuesto copy` | Copy the curl command to the export register |
 | `:Rikuesto format` | Format the buffer (idempotent) |
 | `:Rikuesto list` | Pick a request from a list and run it |
@@ -243,9 +243,9 @@ require('rikuesto').setup({
     explode_query = 'keep',
   },
   curl_export = {
-    dialect = 'native',  -- native | pwsh | sh | cmd
+    dialect = 'auto',    -- auto | pwsh | sh | cmd | native
     register = '+',
-    mask_secrets = true,
+    mask_secrets = false, -- true replaces secrets with *** (the command stops running)
   },
   ui = {
     response = { layout = 'right', size = 0.4, open = 'auto', max_bytes = 2097152 },
@@ -328,13 +328,34 @@ Network and file-system access are denied unless you enable them in `setup()`.
 
 ## Copy as curl
 
-`:Rikuesto curl` prints the command for the cursor request; `:Rikuesto curl!` copies it to
-`curl_export.register` (default `+`). The request is fully resolved first — variables substituted,
-bodies inlined or referenced — and secrets matching `mask_patterns` are masked.
+`:Rikuesto curl` prints the command for the cursor request; `:Rikuesto curl!` (or `:Rikuesto copy`)
+copies it to `curl_export.register` (default `+`). The output is a command you can paste into a shell
+and run:
+
+- the request is fully resolved first — `{{variables}}`, dynamic variables and named-response chains
+  are substituted, so no `{{...}}` survives;
+- **no file references**: the response-capture plumbing is stripped (`-sS`, `--no-progress-meter`,
+  `-D`, `-o`, `-w '%{json}'`), and every payload is inlined as `--data-raw '...'` — including bodies
+  that live in a `< ./body.json` file and bodies large enough that the plugin uses a temp file
+  internally;
+- **real values**: `curl_export.mask_secrets` is `false` by default, so `***` never replaces your
+  credentials or JSON fields. Turn it on when the copy leaves your machine;
+- **quotes only where needed**: it starts with the plain command word (`curl.exe` on Windows, `curl`
+  elsewhere — never a quoted absolute path, which is a `ParserError` in PowerShell), and arguments are
+  quoted only when they contain whitespace or shell metacharacters:
+
+```text
+curl.exe -L --max-time 30 https://jsonplaceholder.typicode.com/posts
+curl.exe -X POST -H 'Content-Type: application/json' --data-raw '{"a":1}' https://api.example.com/x
+```
 
 Pick the quoting flavour with `:Rikuesto curl pwsh`, `:Rikuesto curl sh`, `:Rikuesto curl cmd`, or set
-`curl_export.dialect`. The default `native` prints one argument per line, which is the safest thing to
-paste anywhere.
+`curl_export.dialect`. The default `auto` is the platform shell (`pwsh` on Windows, `sh` elsewhere);
+`native` prints one argument per line and is a reference listing, not a runnable command.
+
+When a body cannot be inlined losslessly (unreadable file, NUL bytes, `-F name=@file`) the command
+keeps no file reference either — you get a warning describing what was dropped. A copy longer than the
+Windows 32,767-character command-line limit is still produced, with a warning.
 
 ## Syntax highlighting
 

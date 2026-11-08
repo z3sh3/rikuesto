@@ -367,16 +367,39 @@ vim.system(argv, { cwd = ..., stdin = false, timeout = cfg.timeout, text = false
 
 ### 7.6 curl exporter（复制为 curl）
 
-同一份 `curl.lua` 产出 argv，exporter 再做「引号化」：
+同一份 `curl.lua` 产出 argv；exporter 分两步：**`export_argv` 改写 argv** → **`to_string` 引号化**。
 
-| 目标 | 策略 |
+`export_argv` 的目标是「粘贴回来就能跑」，因此对运行期 argv 做下列改写：
+
+| 运行期 argv | 复制出的命令 | 理由 |
+|---|---|---|
+| `-sS --no-progress-meter` | 删除 | 静默是插件采集响应用的；人读的时候应该看得到进度与错误 |
+| `-D <tmp>/headers.txt` / `-o <tmp>/body.bin` / `-w '%{json}'` | 删除 | 否则粘贴出的命令会写临时文件，并用元数据 JSON 顶替响应体 |
+| `--data-binary @<tmp>/payload.bin`（超长正文） | `--data-raw '<正文>'` | 正文原文保存在 `spec.temp_files[kind=body].text`，可无损还原 |
+| `--data-binary @<file>`（`< ./body.json`） | `--data-raw '<文件字节>'` | 复制结果不得引用文件；`readfile(..., 'b')` 保留行尾，字节与原文件一致 |
+| `--data-raw` / `-F name=@file` | 原样保留 | 前者已经是内联文本；后者是用户自己声明的上传语义，不是插件的临时文件 |
+| `<resolved curl path>` | `curl`（Linux/macOS）/ `curl.exe`（Windows） | 复制的命令要以**命令词**开头：PowerShell 里 `'C:\Program Files\...\curl.EXE' --version` 是 `ParserError`（引号词是字符串表达式，不是命令）。只有 `tools.curl` 指向的二进制不叫 `curl` 时才保留路径 |
+
+只有值与 `curl.build` 生成的临时路径一致时才剔除，因此用户写在 `curl.extra_args` 里的 `-o` 等参数不会被吞掉。
+无法无损内联时（文件读不到、含 NUL 字节、`-F name=@file`）不伪造内容，而是通过 `notes` 返回提示，由 `commands.lua` 用 `notify.warn` 展示。
+
+| `dialect` | 策略 |
 |---|---|
-| `pwsh`（本机默认） | 单引号字符串，内部 `'` → `''`；多行 body 用 here-string `@'...'@` 或 `--data-binary $'...'`（选择单引号 + 反引号安全子集） |
-| `sh` / `bash` | 单引号，内部 `'` → `'\''` |
-| `cmd` | 双引号 + `^` 转义 |
-| `native`（默认） | 逐行输出 argv（`--data-binary` + 文件形式），最稳 |
+| `auto`（默认） | Windows → `pwsh`，其他 → `sh` |
+| `pwsh` | 只在必要时用单引号，内部 `'` → `''`；多行 body 直接在单引号串内换行（pwsh 允许）；若命令词本身需引号（非 curl 路径），前面补调用运算符 `&` |
+| `sh` / `bash` | 只在必要时用单引号，内部 `'` → `'\''` |
+| `cmd` | 只在必要时用双引号 + `^` 转义（`%NAME%` 会展开、多行 body 无法表达，已知限制） |
+| `native` | 逐行输出 argv，**不是可执行命令**，仅作参考 |
 
-多行 body 默认替换为 `--data-raw @<file>` 或 `-d @payload.json`，并提示「body 已展开为文件引用」；`cfg.curl_export.inline_body_max` 控制阈值。输出目标：`setreg('+')` + `:echo` + 可选 `vim.ui.input` 预览。
+引号是**最小化**的：只有含空白或 shell 元字符（`$` `` ` `` `"` `&` `|` `<` `>` `;` `{` `}` `,` `*` `?` `(` `)` 等）的参数才加引号，`-X`、`POST`、`30`、`--data-raw`、普通主机名一律裸写。于是最常见的 GET 导出就是：
+
+```text
+curl.exe -L --max-time 30 https://jsonplaceholder.typicode.com/posts
+```
+
+默认 `auto` 而不是 `native`：复制出来的东西必须能直接粘贴执行。`curl_export.mask_secrets` 默认 `false`——复制是用户自己的请求，`***` 只会让命令跑不起来；要外发（聊天、issue、共享终端）时再打开。输出目标：`setreg('+')` + `:echo`。
+
+验证方式（`tests/smoke/run_ui.lua`）不只比字符串：把导出的命令原样交给真实 shell 执行（末尾追加 `--version`，curl 会直接打印版本且不发请求），pwsh 与 sh 必须 exit 0。
 
 ---
 
@@ -694,9 +717,9 @@ require('rikuesto').setup({
     register_conform = true,
   },
   curl_export = {
-    dialect = 'native',              -- native|pwsh|sh|cmd
+    dialect = 'auto',                -- auto(平台 shell)|pwsh|sh|cmd|native
     register = '+',
-    mask_secrets = true,
+    mask_secrets = false,            -- 打开后 `***` 顶替密钥（命令将不可执行）
   },
   ui = {
     response = { layout = 'right', size = 0.4, open = 'auto' },
@@ -752,7 +775,8 @@ require('rikuesto').setup({
 | Windows 控制台编码干扰 JSON body | body 被破坏 | 一律 temp 文件 + `vim.uv` 二进制写（§7.3） |
 | 响应体是二进制/大文件 | UI 卡死 | 只渲染前 N KB（`cfg.ui.response.max_bytes` 默认 2MB），提示「已截断」，支持 `gf` 用外部程序打开 |
 | JS 运行时不存在 | F6 不可用 | `runtime=none` 降级 + 明确提示 + 文档给出 deno/node 安装建议；断言功能仍可由 `??` 覆盖 |
-| 用户 env.json 里含密钥 | 泄漏到日志/剪贴板 | 掩码（§7.5/§14）；`curl_export.mask_secrets=true` 时 `***` 替换 |
+| 用户 env.json 里含密钥 | 泄漏到日志/剪贴板 | 掩码（§7.5/§14）；`curl_export.mask_secrets=true` 时 `***` 替换（默认关闭：复制是给写请求的人自己用的，脱敏后命令就跑不了） |
+| 复制出的命令内联了长 body | Windows 32767 字符上限下粘贴失败 | 不引入文件引用，改为 `notify.warn` 提示字符数（§7.6） |
 | jq/oxfmt 未安装或版本过旧 | JSON/JS 格式化降级 | 三级回退（§9.3-6）：jq → 内置保序 printer；oxfmt → 原样；`:checkhealth` 明确标注 |
 | jq 拒收 JSON5 风格 body（尾逗号/注释） | 该 body 不缩进 | 视为「不是严格 JSON」，原样保留并 debug 日志；不试图修复用户内容 |
 | oxfmt 对 JS 片段（顶层 `return`）行为变化 | JS 块格式化失败 | 包裹 `(async function(){...})` 后再格式化；失败即原样，永不阻断保存 |
@@ -932,6 +956,7 @@ D/E: json_body 的空白要求
 | rest.nvim 依赖 LuaRocks（README 前提） | rest.nvim README：LuaRocks 徽章、`:Rocks install rest.nvim`、依赖 `nvim-nio`/`mimetypes`/`xml2lua`/`fidget.nvim`/`tree-sitter-http` | ✅ README 判断准确，绕开它对 |
 | `.http` 规范细节（`###`、`{{}}`、`{{%enc}}`、`> {% %}`、`# @name`、`$random.*`、`$shared`） | http-files.org 各 spec 页（一手来源） | ✅ 与 §5–§6 一一对应 |
 | `vim.json` 往返丢键顺序 | 本机实测 | ✅ `{"z":1,"a":2,"m":3}` → `{"m":3,"z":1,"a":2}`，附录 C 的动机成立 |
+| `readfile(path, 'b')` 保留文件末尾换行（尾部多一个空串元素） | 本机实测 | ✅ 因此 §7.6 内联 `< ./body.json` 时字节与 `--data-binary @file` 一致 |
 
 ### D.2 核实中**发现并修正**的问题
 

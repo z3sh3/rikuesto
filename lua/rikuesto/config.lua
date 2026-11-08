@@ -44,10 +44,14 @@ M.defaults = {
     indent = 2,
   },
   curl_export = {
-    dialect = 'native', -- native | pwsh | sh | cmd
+    -- `auto` = the platform shell (pwsh on Windows, sh elsewhere), so the copy is a
+    -- command that can be pasted and run. `native` is the non-executable one-arg-per-line
+    -- listing (useful as a reference only).
+    dialect = 'auto', -- auto | pwsh | sh | cmd | native
     register = '+',
-    mask_secrets = true,
-    inline_body_max = 2000,
+    -- Off: a copy is the user's own request, and `***` values make it unrunnable.
+    -- Turn it on when the copy leaves the machine (chat, issue, shared terminal).
+    mask_secrets = false,
   },
   ui = {
     response = {
