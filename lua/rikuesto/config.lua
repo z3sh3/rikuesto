@@ -56,7 +56,7 @@ M.defaults = {
   ui = {
     response = {
       layout = 'right', -- right | bottom | top | left | float (vsplit -> right, split/botright -> bottom)
-      size = 0.4,
+      size = 0.5,
       open = 'auto', -- auto | always | never
       -- Initial view of the response buffer: all | header | body | script. H/B/S/A switch
       -- inside the buffer, J/K walk the same order; the last choice sticks for the session.

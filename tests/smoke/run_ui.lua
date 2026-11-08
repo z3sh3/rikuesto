@@ -266,6 +266,42 @@ do
 
     local opos, rpos = place(nil)
     check(rpos[1] == opos[1] and rpos[2] > opos[2], 'default layout is a vertical split on the right')
+
+    -- Default size is half of the editor (regression: 0.4 shipped a 40% split and users read that
+    -- as "the split is not 50/50").
+    local function widths(layout, size)
+        local opts = { log = { level = 'error' }, ui = { response = { open = 'never' } } }
+        if layout then
+            opts.ui.response.layout = layout
+        end
+        if size then
+            opts.ui.response.size = size
+        end
+        config_mod.setup(opts)
+        mod.reset()
+        vim.cmd('silent! only')
+        local scratch = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_win_set_buf(0, scratch)
+        local origin = vim.api.nvim_get_current_win()
+        mod.open(fake, {})
+        local rwin = vim.api.nvim_get_current_win()
+        local got = { response = vim.api.nvim_win_get_width(rwin), origin = vim.api.nvim_win_get_width(origin) }
+        mod.close()
+        vim.api.nvim_buf_delete(scratch, { force = true })
+        return got
+    end
+
+    local default_widths = widths(nil, nil)
+    local expected = math.max(30, math.floor(vim.o.columns * 0.5))
+    check(default_widths.response == expected,
+        ('default split is half the editor (got %d, expected %d of %d columns)')
+            :format(default_widths.response, expected, vim.o.columns))
+    check(math.abs(default_widths.response - default_widths.origin) <= 1,
+        ('default split leaves both halves equal (response %d, request %d)')
+            :format(default_widths.response, default_widths.origin))
+    local small = widths(nil, 0.25)
+    check(small.response >= 30, 'a configured size below 30 columns is clamped to 30')
+
     opos, rpos = place('bottom')
     check(rpos[1] > opos[1] and rpos[2] == opos[2], 'layout = bottom opens below')
     opos, rpos = place('vsplit')

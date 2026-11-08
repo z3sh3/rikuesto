@@ -249,7 +249,7 @@ require('rikuesto').setup({
     mask_secrets = false, -- true replaces secrets with *** (the command stops running)
   },
   ui = {
-    response = { layout = 'right', size = 0.4, open = 'auto', view = 'all', max_bytes = 2097152 },
+    response = { layout = 'right', size = 0.5, open = 'auto', view = 'all', max_bytes = 2097152 },
     extmark = { enabled = true },
   },
   keymaps = false,          -- no shortcuts by default; true = full set, table = only those keys
@@ -410,8 +410,11 @@ require('rikuesto').setup({ ui = { response = { view = 'body' } } })
 | `top` | horizontal split above |
 | `float` | floating window |
 
-`size` is the fraction of the screen the window takes (width for vertical layouts, height for
-horizontal ones). Legacy values still work: `split`/`botright` mean `bottom`, `vsplit` means `right`.
+`size` is the fraction of the **editor** the window takes — width for vertical layouts, height for
+horizontal ones; the default `0.5` splits the screen in half. Because it is measured against
+`vim.o.columns`/`vim.o.lines` and not against the current window, a sidebar makes the response look
+wider than the configured fraction. Legacy values still work: `split`/`botright` mean `bottom`,
+`vsplit` means `right`.
 
 ```lua
 require('rikuesto').setup({ ui = { response = { layout = 'bottom', size = 0.35 } } })

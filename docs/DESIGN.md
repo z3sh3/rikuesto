@@ -643,7 +643,7 @@ require('rikuesto').setup({
 
 ### 11.3 响应窗口
 
-- 布局：`ui.response.layout`，取值为 `right`（**默认，右侧垂直 split**）/ `bottom` / `top` / `left` / `float`；`size` 表示占比（垂直布局是宽度、水平布局是高度）。别名：`vsplit`→`right`、`split`/`botright`→`bottom`、其他非法值回退 `right`。
+- 布局：`ui.response.layout`，取值为 `right`（**默认，右侧垂直 split**）/ `bottom` / `top` / `left` / `float`；`size` 表示占比（垂直布局是宽度、水平布局是高度），**默认 `0.5`（五五分）**，且是相对整个编辑器（`vim.o.columns`/`vim.o.lines`）而不是当前窗口：开着侧边栏时观感会大于该比例。别名：`vsplit`→`right`、`split`/`botright`→`bottom`、其他非法值回退 `right`。
   - 实现注意：`:vsbuffer` 不是合法 Ex 命令（会报 `E492`），正确做法是先 `vsplit`/`split` 再 `nvim_win_set_buf()`；位置用 `topleft`/`belowright` 修饰符控制。实测：`right→右侧`、`bottom→下方`、`top→上方`、`left→左侧`。
 - 内容顺序：`状态行`（含 HTTP 版本/状态码/原因/耗时/大小/重定向）→ 空行 → `响应头`（折叠）→ 空行 → `body`。
 - 视图（`ui/response_view.lua`，纯渲染，可在无窗口状态下单测）：响应 buffer 可以只显示其中一块，而不再是一整块滚动内容。
@@ -738,7 +738,7 @@ require('rikuesto').setup({
     mask_secrets = false,            -- 打开后 `***` 顶替密钥（命令将不可执行）
   },
   ui = {
-    response = { layout = 'right', size = 0.4, open = 'auto', view = 'all' },
+    response = { layout = 'right', size = 0.5, open = 'auto', view = 'all' },
     extmark = { enabled = true },
     statusline = { enabled = true },
   },

@@ -59,7 +59,7 @@ local function open_split(layout)
   vim.cmd(('silent %s %s'):format(placement, vertical and 'vsplit' or 'split'))
   local new_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(new_win, buf)
-  local size = config.get().ui.response.size or 0.4
+  local size = config.get().ui.response.size or 0.5
   if vertical then
     vim.api.nvim_win_set_width(new_win, math.max(30, math.floor(vim.o.columns * size)))
   else
