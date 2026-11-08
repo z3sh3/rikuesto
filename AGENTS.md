@@ -95,6 +95,12 @@ Do not re-litigate this without new measured evidence. The rejected alternative 
 Consequence: any new `.http` feature must be implemented in `parse/` first; treesitter queries may
 never become load-bearing.
 
+Highlighting is **delegated**: the plugin must never call `vim.treesitter.start()` (or set
+`foldmethod`/`foldexpr`) for `.http` buffers. The user's parser manager owns that. Measured reason:
+parser managers register their `FileType` hook when their own `setup()` runs, so the ordering problem
+belongs to their configuration, not to this plugin. Keep the plugin's tree-sitter surface to reading
+`queries/http/*` behaviour indirectly (injections) and never to starting highlighters.
+
 ### 3.3 Frozen data structures (see `docs/INTERFACES.md`)
 
 - `Request`, `ParseResult`, `Body`, `Script`, `Response`, `Diagnostic`.
@@ -176,7 +182,10 @@ via `job:cancel()`, and cleans temp files unless `keep_temp_on_error`.
   starts, removed when it finishes, and skipped when the user already owns that lhs.
 - A user cancel must surface as `error.kind == 'cancelled'` (not as a curl failure) so the
   response window and badges can tell it apart from a transport error.
-- Response window is a non-modifiable scratch buffer (`filetype=rikuesto-response`, or `json`).
+- Response window is a non-modifiable scratch buffer (`filetype=rikuesto-response`, or `json`) and
+  opens in a **vertical split on the right** by default (`ui.response.layout = 'right'`; `bottom`,
+  `top`, `left`, `float` are the alternatives). Split with `vsplit`/`split` and then
+  `nvim_win_set_buf()` — `:vsbuffer` does not exist.
 - Result badges are virtual text via a dedicated extmark namespace.
 - `:checkhealth rikuesto` must report curl version + `%{json}` capability, jq/oxfmt presence, JS
   runtime, treesitter parser, env file state, and a parser smoke test.

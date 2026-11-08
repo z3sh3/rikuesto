@@ -51,7 +51,7 @@ M.defaults = {
   },
   ui = {
     response = {
-      layout = 'split', -- split | botright | float
+      layout = 'right', -- right | bottom | top | left | float (vsplit -> right, split/botright -> bottom)
       size = 0.4,
       open = 'auto', -- auto | always | never
       max_bytes = 2097152,

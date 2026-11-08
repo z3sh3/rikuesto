@@ -619,7 +619,8 @@ require('rikuesto').setup({
 
 ### 11.3 响应窗口
 
-- 布局：`split`（默认，右侧）/ `botright split` / `float`；宽度比可配。
+- 布局：`ui.response.layout`，取值为 `right`（**默认，右侧垂直 split**）/ `bottom` / `top` / `left` / `float`；`size` 表示占比（垂直布局是宽度、水平布局是高度）。别名：`vsplit`→`right`、`split`/`botright`→`bottom`、其他非法值回退 `right`。
+  - 实现注意：`:vsbuffer` 不是合法 Ex 命令（会报 `E492`），正确做法是先 `vsplit`/`split` 再 `nvim_win_set_buf()`；位置用 `topleft`/`belowright` 修饰符控制。实测：`right→右侧`、`bottom→下方`、`top→上方`、`left→左侧`。
 - 内容顺序：`状态行`（含 HTTP 版本/状态码/原因/耗时/大小/重定向）→ 空行 → `响应头`（折叠）→ 空行 → `body`。
 - 语法：body 为 JSON 时 `filetype=json`（复用 treesitter），否则 `rikuesto-response`（自定义 filetype，`syntax` 关键字文件，不引入额外 parser）。
 - 交互：`q` 关闭、`<CR>` 在折叠上切换、`gf`/`<CR>` 打开外部 body 文件、`y` 复制 body。
@@ -636,12 +637,19 @@ require('rikuesto').setup({
 
 ## 12. Treesitter 集成
 
-- **不打包 parser**，不管理 parser 安装；启动时 `pcall(vim.treesitter.language.add, 'http')` 探测，缺失则：语法高亮降级（提示一条一次性 notify），功能（解析/执行/格式化/curl）**完全不受影响**。
-- 自有查询目录 `queries/http/*.scm` 用 `; extends` 语义补充（nvim 会叠加 runtimepath 上的查询），例如把未解析变量 `{{foo}}` 中 `foo` 用 `@variable.parameter`、把 `> {% %}` 边界用 `@punctuation.bracket`。
-- `injections.scm` 已把 `json_body`、`xml_body`、`graphql_data`、`script` 注入到对应语言（实测已生效），因此 body 内编辑体验免费获得；rikuesto 只需保证 `filetype`/`parser` 正确关联（`vim.treesitter.language.register('http', {'http','rest'})`）。
-- 若用户升级 grammar 导致 nodes 变化：因为语义解析不依赖 TS，只有高亮可能退化 → **故障半径可控**，这是 §3 决策的直接收益。
-
----
+- **不打包 parser，不管理 parser 安装，也不负责启动高亮**。`ftplugin/http.lua` 里不调用
+  `vim.treesitter.start()`；高亮 / 折叠完全交给用户已有的 parser 管理器（本机为
+  `romus204/tree-sitter-manager.nvim`）。
+- **为什么不接管（实测）**：Neovim 不会自动开启 tree-sitter；解析器管理器的 `highlight` 钩子是在它
+  自己 `setup()` 时注册的 `FileType *` autocmd。用户把该插件挂在 `event = "VeryLazy"`，于是在那之前
+  打开的 `.http` 缓冲拿不到高亮。实测：`-c edit test.http` → `parser=true, highlights query=true,
+  highlighter=false`；`doautocmd User VeryLazy` 之后再打开同一文件 → `highlighter=true`。
+  结论：这是**用户配置的加载顺序**问题，正确修法是在配置侧（把 parser 管理器提前到
+  `BufReadPre`/`BufNewFile` 或 eager 加载），而不是让插件去兜底。
+- 设计初稿里的 `queries/http/*.scm` **未实现**（可选增强）；parser 自带的
+  `highlights/folds/injections` 已够用：`json_body`/`xml_body`/`graphql_data`/`script` 都注入到对应语言。
+- 折叠同样不接管（不设 `foldmethod`/`foldexpr`），需要时由用户自行设置。
+- 语义解析不依赖 TS，grammar 升级只会影响显示 → **故障半径可控**（§3 决策的直接收益）。
 
 ## 13. 配置（`setup(opts)`）草案
 
@@ -691,7 +699,7 @@ require('rikuesto').setup({
     mask_secrets = true,
   },
   ui = {
-    response = { layout = 'split', size = 0.4, open = 'auto' },
+    response = { layout = 'right', size = 0.4, open = 'auto' },
     extmark = { enabled = true },
     statusline = { enabled = true },
   },

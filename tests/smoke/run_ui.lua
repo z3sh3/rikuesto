@@ -44,6 +44,11 @@ check(vim.bo[bufnr].filetype == 'http', 'test.http buffer has filetype=http')
 check(vim.bo[bufnr].commentstring == '### %s', 'ftplugin sets commentstring')
 check(vim.bo[bufnr].omnifunc == 'v:lua.rikuesto_omnifunc', 'ftplugin sets omnifunc')
 
+-- 3b. Highlighting is owned by the user's parser manager: the plugin must not start tree-sitter.
+check(not _G.rikuesto_treesitter_started_hook, 'plugin exposes no treesitter start hook')
+check(require('rikuesto.config').get().treesitter == nil,
+  'no treesitter option: highlighting is not the plugin\'s job')
+
 local parsed = require('rikuesto.parse.block').parse(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false))
 check(#parsed.requests == 18, ('parser sees 18 requests (got %d)'):format(#parsed.requests))
 
@@ -90,6 +95,7 @@ end
 --     through to the named-request branch and the command did nothing)
 do
   vim.api.nvim_win_set_cursor(0, { 12, 0 })
+  local origin_win = vim.api.nvim_get_current_win()
   require('rikuesto.commands').dispatch({ args = 'run', bang = false })
   local finished = vim.wait(30000, function()
     local last = require('rikuesto.state').last
@@ -104,6 +110,14 @@ do
   check(last and type(last.response.json) == 'table', 'response body decoded as JSON')
   local summaries = require('rikuesto.state').results[bufnr]
   check(summaries and summaries[1] ~= nil, 'per-request summary stored for the extmark')
+
+  -- default layout: a vertical split on the right, not a top/bottom split
+  check(vim.api.nvim_get_current_win() ~= origin_win, 'response opened in its own window')
+  local opos = vim.api.nvim_win_get_position(origin_win)
+  local rpos = vim.api.nvim_win_get_position(vim.api.nvim_get_current_win())
+  check(rpos[1] == opos[1] and rpos[2] > opos[2],
+    ('default layout places the response on the right (row %d/%d, col %d/%d)')
+      :format(rpos[1], opos[1], rpos[2], opos[2]))
 
   -- unknown name must warn instead of running something random
   local before = require('rikuesto.state').last
@@ -194,7 +208,46 @@ do
     config_mod.setup({})
 end
 
--- 11. health module
+-- 11. response window layout is configurable (no network: renders a fake response)
+do
+    local mod = require('rikuesto.ui.response_win')
+    local config_mod = require('rikuesto.config')
+
+    local fake = { status = 200, reason = 'OK', headers = {}, body = '{}', ok = true }
+
+    local function place(layout)
+        local opts = { log = { level = 'error' }, ui = { response = { open = 'never' } } }
+        if layout then
+            opts.ui.response.layout = layout
+        end
+        config_mod.setup(opts)
+        mod.reset()
+        vim.cmd('silent! only')
+        local scratch = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_lines(scratch, 0, -1, false, { 'GET https://example.com', '', '###' })
+        vim.api.nvim_win_set_buf(0, scratch)
+        local origin = vim.api.nvim_get_current_win()
+        mod.open(fake, {})
+        local rwin = vim.api.nvim_get_current_win()
+        local opos = vim.api.nvim_win_get_position(origin)
+        local rpos = vim.api.nvim_win_get_position(rwin)
+        mod.close()
+        vim.api.nvim_buf_delete(scratch, { force = true })
+        return opos, rpos
+    end
+
+    local opos, rpos = place(nil)
+    check(rpos[1] == opos[1] and rpos[2] > opos[2], 'default layout is a vertical split on the right')
+    opos, rpos = place('bottom')
+    check(rpos[1] > opos[1] and rpos[2] == opos[2], 'layout = bottom opens below')
+    opos, rpos = place('vsplit')
+    check(rpos[1] == opos[1] and rpos[2] > opos[2], 'legacy vsplit alias means right')
+    opos, rpos = place('nonsense')
+    check(rpos[1] == opos[1] and rpos[2] > opos[2], 'unknown layout falls back to right')
+    config_mod.setup({})
+end
+
+-- 12. health module
 do
   local ok, err = pcall(function()
     require('rikuesto.health').check()

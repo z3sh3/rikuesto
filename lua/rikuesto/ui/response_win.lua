@@ -45,6 +45,43 @@ local function release()
   buf = nil
 end
 
+-- Layout aliases: historical names stay valid, but each maps to one concrete placement.
+--   bottom | split | botright -> horizontal split below the request window (default)
+--   right  | vsplit          -> vertical split to the right
+--   top                      -> horizontal split above
+--   left                     -> vertical split to the left
+--   float                    -> floating window
+local LAYOUT_ALIASES = {
+  split = 'bottom',
+  botright = 'bottom',
+  vsplit = 'right',
+}
+
+local function resolve_layout(layout)
+  layout = LAYOUT_ALIASES[layout] or layout or 'right'
+  if layout ~= 'bottom' and layout ~= 'right' and layout ~= 'top' and layout ~= 'left' and layout ~= 'float' then
+    return 'right'
+  end
+  return layout
+end
+
+--- Split the current window and show the response buffer in the new one.
+--- `:vsbuffer` is not an Ex command, so the split and the buffer switch are two separate steps.
+local function open_split(layout)
+  local vertical = (layout == 'right' or layout == 'left')
+  local placement = (layout == 'top' or layout == 'left') and 'topleft' or 'belowright'
+  vim.cmd(('silent %s %s'):format(placement, vertical and 'vsplit' or 'split'))
+  local new_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(new_win, buf)
+  local size = config.get().ui.response.size or 0.4
+  if vertical then
+    vim.api.nvim_win_set_width(new_win, math.max(30, math.floor(vim.o.columns * size)))
+  else
+    vim.api.nvim_win_set_height(new_win, math.max(6, math.floor(vim.o.lines * size)))
+  end
+  return new_win
+end
+
 local function ensure_window()
   if win and vim.api.nvim_win_is_valid(win) then
     return win
@@ -54,7 +91,7 @@ local function ensure_window()
     vim.bo[buf].bufhidden = 'wipe'
     vim.bo[buf].filetype = 'rikuesto-response'
   end
-  local layout = config.get().ui.response.layout
+  local layout = resolve_layout(config.get().ui.response.layout)
   if layout == 'float' then
     local width = math.max(40, math.floor(vim.o.columns * 0.8))
     local height = math.max(10, math.floor(vim.o.lines * 0.7))
@@ -69,10 +106,7 @@ local function ensure_window()
       title = ' rikuesto ',
     })
   else
-    local size = math.max(8, math.floor(vim.o.lines * (config.get().ui.response.size or 0.4)))
-    vim.cmd(layout == 'botright' and ('botright sbuffer ' .. buf) or ('sbuffer ' .. buf))
-    win = vim.api.nvim_get_current_win()
-    vim.api.nvim_win_set_height(win, size)
+    win = open_split(layout)
     vim.wo[win].number = false
     vim.wo[win].relativenumber = false
     vim.wo[win].signcolumn = 'no'

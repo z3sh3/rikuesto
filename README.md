@@ -38,7 +38,7 @@ Repository: <https://github.com/z3sh3/rikuesto>
 | `jq` | no | JSON body formatting; without it a built-in ordered printer is used |
 | `oxfmt` | no | JS fence formatting; without it fences are left untouched |
 | `node` or `deno` | no | Only for `< {% … %}` / `> {% … %}` scripts; Node is preferred |
-| `http` tree-sitter parser | no | Highlighting, folding and injections only; everything works without it |
+| `http` tree-sitter parser | no | Highlighting, folding and injections only; everything works without it. Highlighting is owned by your parser manager, not by this plugin (see [Syntax highlighting](#syntax-highlighting)) |
 
 ## Installation
 
@@ -135,7 +135,7 @@ Content-Type: application/json
 ```
 
 1. Put the cursor on a request and run `:Rikuesto run` (or `<localleader>rr`).
-2. The response opens in a split; press `q` to close it.
+2. The response opens in a vertical split on the right; press `q` to close it.
 3. `:Rikuesto curl!` copies the equivalent curl command to your clipboard.
 4. `:Rikuesto format` reflows the file.
 
@@ -248,7 +248,7 @@ require('rikuesto').setup({
     mask_secrets = true,
   },
   ui = {
-    response = { layout = 'split', size = 0.4, open = 'auto', max_bytes = 2097152 },
+    response = { layout = 'right', size = 0.4, open = 'auto', max_bytes = 2097152 },
     extmark = { enabled = true },
   },
   keymaps = false,          -- no shortcuts by default; true = full set, table = only those keys
@@ -336,6 +336,43 @@ Pick the quoting flavour with `:Rikuesto curl pwsh`, `:Rikuesto curl sh`, `:Riku
 `curl_export.dialect`. The default `native` prints one argument per line, which is the safest thing to
 paste anywhere.
 
+## Syntax highlighting
+
+Highlighting is **not** this plugin's job: it never calls `vim.treesitter.start()`. Install the `http`
+parser with whatever you already use, and let that plugin own the highlighter:
+
+```lua
+require('tree-sitter-manager').setup({ ensure_installed = { 'http' } })
+```
+
+One thing to watch: Neovim does not enable tree-sitter on its own, and a parser manager only starts
+doing it once its `setup()` has run. If you lazy-load your parser manager (for example on
+`VeryLazy`), a `.http` file opened before that point stays unhighlighted — the plugin no longer papers
+over this. Load the manager before the first file is read (`event = { 'BufReadPre', 'BufNewFile' }`) or
+eagerly, and highlighting works for every buffer.
+
+Since parsing, formatting and completion never use tree-sitter, a missing parser only means no colours.
+
+## Response window
+
+After a request the response opens in a split and renders the status line, headers and a pretty body
+(JSON is decoded, `HEAD` responses show no body). Press `q` to close it.
+
+| `ui.response.layout` | Placement |
+|---|---|
+| `right` (**default**) | vertical split to the right |
+| `bottom` | horizontal split below |
+| `left` | vertical split to the left |
+| `top` | horizontal split above |
+| `float` | floating window |
+
+`size` is the fraction of the screen the window takes (width for vertical layouts, height for
+horizontal ones). Legacy values still work: `split`/`botright` mean `bottom`, `vsplit` means `right`.
+
+```lua
+require('rikuesto').setup({ ui = { response = { layout = 'bottom', size = 0.35 } } })
+```
+
 ## Formatting
 
 `:Rikuesto format` rebuilds the file from the parsed structure: normalized separators and request
@@ -366,6 +403,9 @@ runtime, the tree-sitter parser, the env file state and a parser smoke test.
 - **Empty response body for HEAD** — expected: a HEAD response has no body by definition.
 - **`{{name}}` left verbatim** — the variable is not defined in any scope; `:Rikuesto vars` shows what
   was resolved.
+- **No syntax highlighting** — the `http` tree-sitter parser is missing (`:checkhealth rikuesto`
+  reports it), or your parser manager had not run `setup()` yet when the buffer was opened. The
+  plugin never starts tree-sitter: requests and formatting keep working either way.
 
 ## Development
 
